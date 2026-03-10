@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fffaf8;
+  --foreground: #3f3b45;
+  --card: #ffffff;
+  --rose-soft: #fce7f3;
+  --rose-strong: #e11d8f;
+  --rose-deep: #9d174d;
+  --orange-soft: #ffedd5;
+  --font-body: "Nunito", "Avenir Next", "Segoe UI", sans-serif;
+  --font-heading: "Playfair Display", "Cormorant Garamond", Georgia, serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-body);
+  --font-heading: var(--font-heading);
+}
+
+* {
+  border-color: rgb(253 242 248);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body), sans-serif;
+}
+
+.font-heading {
+  font-family: var(--font-heading), serif;
+}
