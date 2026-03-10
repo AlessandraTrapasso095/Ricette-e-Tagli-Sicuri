@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 
+import { DisclaimerGate } from "@/components/disclaimer/disclaimer-gate";
 import { LogoutButton } from "@/components/dashboard/logout-button";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { getDisclaimerStatus } from "@/lib/disclaimer/get-disclaimer-status";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requireUser } from "@/server/auth/session";
 
@@ -18,5 +20,11 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     { onConflict: "id" },
   );
 
-  return <DashboardShell rightTop={<LogoutButton />}>{children}</DashboardShell>;
+  const disclaimerStatus = await getDisclaimerStatus(user.id);
+
+  return (
+    <DisclaimerGate initialAccepted={disclaimerStatus.accepted}>
+      <DashboardShell rightTop={<LogoutButton />}>{children}</DashboardShell>
+    </DisclaimerGate>
+  );
 }

@@ -7,9 +7,10 @@ interface QuickOverviewProps {
   unlockedCount: number;
   bonusCount: number;
   hasChildProfile: boolean;
+  hasChatAccess: boolean;
 }
 
-export function QuickOverview({ userName, unlockedCount, bonusCount, hasChildProfile }: QuickOverviewProps) {
+export function QuickOverview({ userName, unlockedCount, bonusCount, hasChildProfile, hasChatAccess }: QuickOverviewProps) {
   return (
     <div className="space-y-4">
       <Card>
@@ -18,12 +19,21 @@ export function QuickOverview({ userName, unlockedCount, bonusCount, hasChildPro
           Da qui gestisci i tuoi libri sbloccati, i bonus PDF e i menu giornalieri personalizzati.
         </CardDescription>
         <div className="mt-5 flex flex-wrap gap-3">
-          <Link
-            href="/dashboard/chat-menu"
-            className="rounded-2xl bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-600"
-          >
-            Cosa mangiamo oggi?
-          </Link>
+          {hasChatAccess ? (
+            <Link
+              href="/dashboard/chat-menu"
+              className="rounded-2xl bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-600"
+            >
+              Cosa mangiamo oggi?
+            </Link>
+          ) : (
+            <Link
+              href="/dashboard/libri"
+              className="rounded-2xl bg-amber-100 px-4 py-2.5 text-sm font-semibold text-amber-900 transition hover:bg-amber-200"
+            >
+              Sblocca un libro per attivare la chat
+            </Link>
+          )}
           <Link
             href="/dashboard/libri"
             className="rounded-2xl bg-rose-100 px-4 py-2.5 text-sm font-semibold text-rose-900 transition hover:bg-rose-200"

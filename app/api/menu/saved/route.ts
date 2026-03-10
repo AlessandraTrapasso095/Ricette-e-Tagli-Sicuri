@@ -11,7 +11,7 @@ const saveSchema = z.object({
 });
 
 export async function GET() {
-  const { user, unauthorizedResponse } = await getApiUserOrResponse();
+  const { user, unauthorizedResponse } = await getApiUserOrResponse({ requireDisclaimer: true, requireChatAccess: true });
   if (!user) {
     return unauthorizedResponse;
   }
@@ -21,7 +21,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const { user, unauthorizedResponse } = await getApiUserOrResponse();
+  const { user, unauthorizedResponse } = await getApiUserOrResponse({ requireDisclaimer: true, requireChatAccess: true });
   if (!user) {
     return unauthorizedResponse;
   }

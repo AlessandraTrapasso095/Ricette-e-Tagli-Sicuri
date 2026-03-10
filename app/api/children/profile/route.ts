@@ -5,7 +5,7 @@ import { getApiUserOrResponse } from "@/server/auth/api-auth";
 import { getPrimaryChildProfile, savePrimaryChildProfile } from "@/server/children/child-service";
 
 export async function GET() {
-  const { user, unauthorizedResponse } = await getApiUserOrResponse();
+  const { user, unauthorizedResponse } = await getApiUserOrResponse({ requireDisclaimer: true });
   if (!user) {
     return unauthorizedResponse;
   }
@@ -15,7 +15,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const { user, unauthorizedResponse } = await getApiUserOrResponse();
+  const { user, unauthorizedResponse } = await getApiUserOrResponse({ requireDisclaimer: true });
   if (!user) {
     return unauthorizedResponse;
   }

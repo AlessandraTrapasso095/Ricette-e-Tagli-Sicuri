@@ -8,7 +8,7 @@ interface RouteContext {
 }
 
 export async function GET(_: Request, context: RouteContext) {
-  const { user, unauthorizedResponse } = await getApiUserOrResponse();
+  const { user, unauthorizedResponse } = await getApiUserOrResponse({ requireDisclaimer: true });
   if (!user) {
     return unauthorizedResponse;
   }

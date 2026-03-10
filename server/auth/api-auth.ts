@@ -2,9 +2,12 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 
+import { CHAT_ACCESS_REQUIRED_MESSAGE } from "@/config/chat-access";
+import { getDisclaimerStatus } from "@/lib/disclaimer/get-disclaimer-status";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getUserChatAccessStatus } from "@/server/chat/chat-access";
 
-export async function getApiUserOrResponse() {
+export async function getApiUserOrResponse(options?: { requireDisclaimer?: boolean; requireChatAccess?: boolean }) {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -16,6 +19,29 @@ export async function getApiUserOrResponse() {
       user: null,
       unauthorizedResponse: NextResponse.json({ error: "Non autorizzato" }, { status: 401 }),
     };
+  }
+
+  if (options?.requireDisclaimer) {
+    const disclaimerStatus = await getDisclaimerStatus(user.id);
+    if (!disclaimerStatus.accepted) {
+      return {
+        user: null,
+        unauthorizedResponse: NextResponse.json(
+          { error: "Devi prima accettare l'avvertenza importante per usare questa funzione." },
+          { status: 403 },
+        ),
+      };
+    }
+  }
+
+  if (options?.requireChatAccess) {
+    const chatAccess = await getUserChatAccessStatus(user.id);
+    if (!chatAccess.hasAccess) {
+      return {
+        user: null,
+        unauthorizedResponse: NextResponse.json({ error: CHAT_ACCESS_REQUIRED_MESSAGE }, { status: 403 }),
+      };
+    }
   }
 
   return {

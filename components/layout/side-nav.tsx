@@ -14,13 +14,34 @@ interface SideNavProps {
   items: SideNavItem[];
 }
 
+function normalizePath(path: string) {
+  if (path === "/") {
+    return path;
+  }
+
+  return path.replace(/\/+$/, "");
+}
+
+function pathMatches(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export function SideNav({ items }: SideNavProps) {
-  const pathname = usePathname();
+  const pathname = normalizePath(usePathname());
+  const normalizedItems = items.map((item) => ({
+    ...item,
+    normalizedHref: normalizePath(item.href),
+  }));
+
+  const activeHref =
+    normalizedItems
+      .filter((item) => pathMatches(pathname, item.normalizedHref))
+      .sort((a, b) => b.normalizedHref.length - a.normalizedHref.length)[0]?.href ?? null;
 
   return (
     <nav className="flex flex-col gap-1">
-      {items.map((item) => {
-        const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+      {normalizedItems.map((item) => {
+        const isActive = activeHref === item.href;
 
         return (
           <Link

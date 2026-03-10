@@ -5,6 +5,7 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getAvailableBonusFiles } from "@/server/bonus/bonus-service";
 import { getBooksWithAccess, getUserUnlockedBooks } from "@/server/books/book-access-service";
+import { getUserChatAccessStatus } from "@/server/chat/chat-access";
 import { getPrimaryChildProfile } from "@/server/children/child-service";
 import { requireUser } from "@/server/auth/session";
 
@@ -12,12 +13,13 @@ export default async function DashboardPage() {
   const user = await requireUser("/login");
   const supabase = await createSupabaseServerClient();
 
-  const [profileResult, unlockedBooks, availableBonus, childProfile, allBooks] = await Promise.all([
+  const [profileResult, unlockedBooks, availableBonus, childProfile, allBooks, chatAccess] = await Promise.all([
     supabase.from("profiles").select("full_name, email").eq("id", user.id).maybeSingle(),
     getUserUnlockedBooks(user.id),
     getAvailableBonusFiles(user.id),
     getPrimaryChildProfile(user.id),
     getBooksWithAccess(user.id),
+    getUserChatAccessStatus(user.id),
   ]);
 
   const userName =
@@ -34,6 +36,7 @@ export default async function DashboardPage() {
         unlockedCount={unlockedBooks.length}
         bonusCount={availableBonus.length}
         hasChildProfile={Boolean(childProfile)}
+        hasChatAccess={chatAccess.hasAccess}
       />
 
       <div className="grid gap-4 md:grid-cols-2">

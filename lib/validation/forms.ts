@@ -61,7 +61,8 @@ export const supportTicketSchema = z.object({
 });
 
 export const chatPromptSchema = z.object({
-  sessionId: z.string().uuid().optional(),
+  sessionId: z.preprocess((value) => (value === null ? undefined : value), z.string().uuid().optional()),
+  sourceSessionId: z.preprocess((value) => (value === null ? undefined : value), z.string().uuid().optional()),
   prompt: z.string().min(2, "Scrivi una richiesta più chiara.").max(1200, "Messaggio troppo lungo."),
   saveMenu: z.boolean().optional().default(false),
 });

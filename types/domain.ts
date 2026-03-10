@@ -43,11 +43,23 @@ export interface DailyMenuMeal {
   notes: string[];
   safetyNotes: string[];
   substitutions: string[];
+  balancedPlate?: {
+    carbs: string;
+    proteins: string;
+    vegetables: string;
+    healthyFats: string;
+  } | null;
+}
+
+export interface DailyMenuChildProfileSummary {
+  ageMonths: number | null;
+  weaningType: FeedingStyle | "non_specificato";
+  notes: string[];
 }
 
 export interface DailyMenu {
   title: string;
-  childProfileSummary: string;
+  childProfileSummary: DailyMenuChildProfileSummary;
   meals: DailyMenuMeal[];
   dailyNotes: string[];
   warnings: string[];

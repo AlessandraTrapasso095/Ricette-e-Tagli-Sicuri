@@ -4,7 +4,7 @@ import { getApiUserOrResponse } from "@/server/auth/api-auth";
 import { getUserUnlockedBooks } from "@/server/books/book-access-service";
 
 export async function GET() {
-  const { user, unauthorizedResponse } = await getApiUserOrResponse();
+  const { user, unauthorizedResponse } = await getApiUserOrResponse({ requireDisclaimer: true });
   if (!user) {
     return unauthorizedResponse;
   }

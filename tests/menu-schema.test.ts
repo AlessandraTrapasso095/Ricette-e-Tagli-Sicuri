@@ -6,7 +6,11 @@ describe("dailyMenuSchema", () => {
   it("valida un menu completo", () => {
     const result = dailyMenuSchema.safeParse({
       title: "Menu prova",
-      childProfileSummary: "Bambino 12 mesi, svezzamento misto.",
+      childProfileSummary: {
+        ageMonths: 12,
+        weaningType: "misto",
+        notes: ["Profilo demo"],
+      },
       meals: [
         {
           mealType: "colazione",
@@ -25,6 +29,12 @@ describe("dailyMenuSchema", () => {
           notes: ["Usa olio evo"],
           safetyNotes: ["Tagli sicuri"],
           substitutions: ["Zucca"],
+          balancedPlate: {
+            carbs: "2/4 pasta",
+            proteins: "1/4 legumi",
+            vegetables: "1/4 zucchine",
+            healthyFats: "olio EVO a crudo",
+          },
         },
         {
           mealType: "merenda",
@@ -43,6 +53,12 @@ describe("dailyMenuSchema", () => {
           notes: ["Accompagna con verdure"],
           safetyNotes: ["Morbide e schiacciabili"],
           substitutions: ["Ceci"],
+          balancedPlate: {
+            carbs: "2/4 patata",
+            proteins: "1/4 legumi",
+            vegetables: "1/4 verdure",
+            healthyFats: "olio EVO a crudo",
+          },
         },
       ],
       dailyNotes: ["Offri acqua durante la giornata"],
@@ -56,7 +72,11 @@ describe("dailyMenuSchema", () => {
   it("rifiuta menu senza 4 pasti", () => {
     const result = dailyMenuSchema.safeParse({
       title: "Menu incompleto",
-      childProfileSummary: "Profilo",
+      childProfileSummary: {
+        ageMonths: null,
+        weaningType: "non_specificato",
+        notes: [],
+      },
       meals: [],
       dailyNotes: [],
       warnings: [],
