@@ -66,7 +66,7 @@ export function AdminChallengeForm({ books, onSaved }: AdminChallengeFormProps) 
 
   return (
     <Card>
-      <CardTitle>Nuova challenge</CardTitle>
+      <CardTitle>+ Nuova challenge</CardTitle>
       <CardDescription>Aggiungi challenge senza toccare il codice.</CardDescription>
 
       <form className="mt-4 grid gap-3" onSubmit={form.handleSubmit(onSubmit)}>

@@ -3,6 +3,7 @@ import "server-only";
 import { redirect } from "next/navigation";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { hasActiveAdminRole } from "@/server/auth/admin-guard";
 
 export async function getCurrentUser() {
   const supabase = await createSupabaseServerClient();
@@ -25,16 +26,9 @@ export async function requireUser(redirectPath = "/login") {
 
 export async function requireAdmin() {
   const user = await requireUser("/login");
-  const supabase = await createSupabaseServerClient();
+  const isAdmin = await hasActiveAdminRole(user.id, user.email);
 
-  const { data: adminRow, error } = await supabase
-    .from("admin_users")
-    .select("id")
-    .eq("user_id", user.id)
-    .eq("is_active", true)
-    .maybeSingle();
-
-  if (error || !adminRow) {
+  if (!isAdmin) {
     redirect("/dashboard");
   }
 

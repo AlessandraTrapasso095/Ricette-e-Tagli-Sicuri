@@ -13,8 +13,9 @@ export function BrandLogo({ compact = false, href = "/" }: { compact?: boolean; 
         priority
       />
       {!compact ? (
-        <span className="font-heading text-lg font-semibold tracking-tight text-rose-900">
-          Ricette e Tagli Sicuri
+        <span className="inline-flex flex-col leading-tight">
+          <span className="font-heading text-lg font-semibold tracking-tight text-rose-900">Ricette e Tagli Sicuri</span>
+          <span className="text-[10px] font-medium text-rose-700/80">di Lorena Mariani</span>
         </span>
       ) : null}
     </Link>

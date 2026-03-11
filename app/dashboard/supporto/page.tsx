@@ -1,29 +1,46 @@
 import { SupportTicketForm } from "@/components/forms/support-ticket-form";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { SUPPORT_ACCESS_REQUIRED_MESSAGE } from "@/config/support-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getBooksWithAccess } from "@/server/books/book-access-service";
 import { getUserSupportTickets } from "@/server/support/support-service";
+import { getUserSupportAccessStatus } from "@/server/support/support-access";
 import { requireUser } from "@/server/auth/session";
+import Link from "next/link";
 
 export default async function DashboardSupportoPage() {
   const user = await requireUser("/login");
   const supabase = await createSupabaseServerClient();
 
-  const [profileResult, books, tickets] = await Promise.all([
+  const [profileResult, supportAccess] = await Promise.all([
     supabase.from("profiles").select("full_name, email").eq("id", user.id).maybeSingle(),
-    getBooksWithAccess(user.id),
-    getUserSupportTickets(user.id),
+    getUserSupportAccessStatus(user.id),
   ]);
 
   const userName = profileResult.data?.full_name ?? "Lettore";
   const userEmail = profileResult.data?.email ?? user.email ?? "";
+
+  if (!supportAccess.hasAccess) {
+    return (
+      <div className="space-y-4">
+        <EmptyState title="Supporto non ancora disponibile" description={SUPPORT_ACCESS_REQUIRED_MESSAGE} />
+        <Card className="p-4">
+          <Link href="/dashboard/libri" className="text-sm font-semibold text-rose-700 hover:text-rose-800">
+            Vai a I miei libri per sbloccare l&apos;accesso
+          </Link>
+        </Card>
+      </div>
+    );
+  }
+
+  const tickets = await getUserSupportTickets(user.id);
 
   return (
     <div className="space-y-6">
       <SupportTicketForm
         userName={userName}
         userEmail={userEmail}
-        books={books.map((book) => ({ slug: book.slug, title: book.title }))}
+        books={supportAccess.unlockedBooks}
       />
 
       <Card>

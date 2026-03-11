@@ -16,7 +16,7 @@ export async function GET() {
     return unauthorizedResponse;
   }
 
-  const adminGuard = await ensureApiAdminOrResponse(user.id);
+  const adminGuard = await ensureApiAdminOrResponse(user.id, user.email);
   if (adminGuard) {
     return adminGuard;
   }
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     return unauthorizedResponse;
   }
 
-  const adminGuard = await ensureApiAdminOrResponse(user.id);
+  const adminGuard = await ensureApiAdminOrResponse(user.id, user.email);
   if (adminGuard) {
     return adminGuard;
   }
@@ -61,7 +61,7 @@ export async function PATCH(request: Request) {
     return unauthorizedResponse;
   }
 
-  const adminGuard = await ensureApiAdminOrResponse(user.id);
+  const adminGuard = await ensureApiAdminOrResponse(user.id, user.email);
   if (adminGuard) {
     return adminGuard;
   }

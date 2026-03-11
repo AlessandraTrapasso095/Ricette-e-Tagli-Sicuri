@@ -5,10 +5,6 @@ import { AUTH_INACTIVITY_TIMEOUT_MS, supabaseCookieOptions } from "@/config/auth
 
 const INACTIVITY_COOKIE_NAME = "rts-last-activity";
 
-function isPublicAuthPath(pathname: string) {
-  return pathname === "/login" || pathname === "/register";
-}
-
 export async function proxy(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -64,9 +60,6 @@ export async function proxy(request: NextRequest) {
       secure: process.env.NODE_ENV === "production",
     });
 
-    if (isPublicAuthPath(pathname)) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
-    }
   } else {
     response.cookies.delete(INACTIVITY_COOKIE_NAME);
   }

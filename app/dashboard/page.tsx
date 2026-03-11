@@ -1,10 +1,12 @@
 import Link from "next/link";
 
+import { DiscoverBooksCard } from "@/components/dashboard/discover-books-card";
 import { QuickOverview } from "@/components/dashboard/quick-overview";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getAdminRecommendedBooks } from "@/server/admin/admin-service";
 import { getAvailableBonusFiles } from "@/server/bonus/bonus-service";
-import { getBooksWithAccess, getUserUnlockedBooks } from "@/server/books/book-access-service";
+import { getUserUnlockedBooks } from "@/server/books/book-access-service";
 import { getUserChatAccessStatus } from "@/server/chat/chat-access";
 import { getPrimaryChildProfile } from "@/server/children/child-service";
 import { requireUser } from "@/server/auth/session";
@@ -13,21 +15,19 @@ export default async function DashboardPage() {
   const user = await requireUser("/login");
   const supabase = await createSupabaseServerClient();
 
-  const [profileResult, unlockedBooks, availableBonus, childProfile, allBooks, chatAccess] = await Promise.all([
+  const [profileResult, unlockedBooks, availableBonus, childProfile, chatAccess, recommendedBooks] = await Promise.all([
     supabase.from("profiles").select("full_name, email").eq("id", user.id).maybeSingle(),
     getUserUnlockedBooks(user.id),
     getAvailableBonusFiles(user.id),
     getPrimaryChildProfile(user.id),
-    getBooksWithAccess(user.id),
     getUserChatAccessStatus(user.id),
+    getAdminRecommendedBooks(),
   ]);
 
   const userName =
     profileResult.data?.full_name ??
     (typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : null) ??
     "Lettore";
-
-  const lockedBooks = allBooks.filter((book) => !book.unlocked).slice(0, 3);
 
   return (
     <div className="space-y-6">
@@ -60,25 +60,7 @@ export default async function DashboardPage() {
           </Link>
         </Card>
 
-        <Card>
-          <CardTitle>Scopri anche gli altri libri</CardTitle>
-          <CardDescription>Sblocca nuovi contenuti con challenge rapide e sicure.</CardDescription>
-          <div className="mt-4 space-y-2">
-            {lockedBooks.length === 0 ? (
-              <p className="text-sm text-zinc-500">Hai già sbloccato tutti i libri disponibili.</p>
-            ) : (
-              lockedBooks.map((book) => (
-                <div key={book.id} className="rounded-2xl bg-orange-50 px-3 py-2 text-sm text-zinc-700">
-                  <p className="font-semibold text-rose-900">{book.title}</p>
-                  <p className="text-xs">Accesso da verificare</p>
-                </div>
-              ))
-            )}
-          </div>
-          <Link href="/dashboard/libri" className="mt-4 inline-block text-sm font-semibold text-rose-700 hover:text-rose-800">
-            Gestisci libri
-          </Link>
-        </Card>
+        <DiscoverBooksCard books={recommendedBooks.filter((book) => book.isActive)} />
       </div>
     </div>
   );

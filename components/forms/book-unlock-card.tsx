@@ -126,8 +126,9 @@ export function BookUnlockCard({ book, onUnlocked }: BookUnlockCardProps) {
               <Input
                 value={answer}
                 onChange={(event) => setAnswer(event.target.value)}
-                placeholder="Inserisci la parola segreta"
+                placeholder="Inserisci la parola segreta in minuscolo"
               />
+              <p className="text-xs text-zinc-500">Inserisci la parola tutta in minuscolo.</p>
               <Button type="submit" disabled={loadingSubmit || answer.trim().length === 0}>
                 {loadingSubmit ? "Verifica in corso..." : "Verifica e sblocca"}
               </Button>

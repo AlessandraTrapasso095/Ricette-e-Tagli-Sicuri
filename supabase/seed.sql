@@ -37,29 +37,29 @@ with challenge_seed as (
   select *
   from (
     values
-      ('ricette-e-tagli-sicuri', 8, 'Inserisci la parola segreta che trovi in grassetto a pagina 8', 'rassicurante', true),
-      ('ricette-e-tagli-sicuri', 12, 'Inserisci la parola segreta che trovi in grassetto a pagina 12', 'rivoluzionario', true),
-      ('ricette-e-tagli-sicuri', 16, 'Inserisci la parola segreta che trovi in grassetto a pagina 16', 'segreto', true),
-      ('ricette-e-tagli-sicuri', 25, 'Inserisci la parola segreta che trovi in grassetto a pagina 25', 'prezioso', true),
-      ('ricette-e-tagli-sicuri', 26, 'Inserisci la parola segreta che trovi in grassetto a pagina 26', 'bilanciato', true),
+      ('ricette-e-tagli-sicuri', 8, 'Inserisci la parola segreta che trovi in rosso a pagina 8 e inseriscila in minuscolo', 'rassicurante', true),
+      ('ricette-e-tagli-sicuri', 12, 'Inserisci la parola segreta che trovi in rosso a pagina 12 e inseriscila in minuscolo', 'rivoluzionario', true),
+      ('ricette-e-tagli-sicuri', 16, 'Inserisci la parola segreta che trovi in rosso a pagina 16 e inseriscila in minuscolo', 'segreto', true),
+      ('ricette-e-tagli-sicuri', 25, 'Inserisci la parola segreta che trovi in rosso a pagina 25 e inseriscila in minuscolo', 'prezioso', true),
+      ('ricette-e-tagli-sicuri', 26, 'Inserisci la parola segreta che trovi in rosso a pagina 26 e inseriscila in minuscolo', 'bilanciato', true),
 
-      ('ricette-e-svezzamento-classico', 4, 'Inserisci la parola segreta che trovi in grassetto a pagina 4', 'precocemente', true),
-      ('ricette-e-svezzamento-classico', 22, 'Inserisci la parola segreta che trovi in grassetto a pagina 22', 'improvvisazioni', true),
-      ('ricette-e-svezzamento-classico', 23, 'Inserisci la parola segreta che trovi in grassetto a pagina 23', 'benessere', true),
-      ('ricette-e-svezzamento-classico', 27, 'Inserisci la parola segreta che trovi in grassetto a pagina 27', 'porridge', true),
-      ('ricette-e-svezzamento-classico', 50, 'Inserisci la parola segreta che trovi in grassetto a pagina 50', 'dattero', true),
+      ('ricette-e-svezzamento-classico', 4, 'Inserisci la parola segreta che trovi in rosso a pagina 4 e inseriscila in minuscolo', 'precocemente', true),
+      ('ricette-e-svezzamento-classico', 22, 'Inserisci la parola segreta che trovi in rosso a pagina 22 e inseriscila in minuscolo', 'improvvisazioni', true),
+      ('ricette-e-svezzamento-classico', 23, 'Inserisci la parola segreta che trovi in rosso a pagina 23 e inseriscila in minuscolo', 'benessere', true),
+      ('ricette-e-svezzamento-classico', 27, 'Inserisci la parola segreta che trovi in rosso a pagina 27 e inseriscila in minuscolo', 'porridge', true),
+      ('ricette-e-svezzamento-classico', 50, 'Inserisci la parola segreta che trovi in rosso a pagina 50 e inseriscila in minuscolo', 'dattero', true),
 
-      ('colazione-e-merenda', 5, 'Inserisci la parola segreta che trovi in grassetto a pagina 5', 'complicati', true),
-      ('colazione-e-merenda', 6, 'Inserisci la parola segreta che trovi in grassetto a pagina 6', 'irresistibile', true),
-      ('colazione-e-merenda', 10, 'Inserisci la parola segreta che trovi in grassetto a pagina 10', 'cruciale', true),
-      ('colazione-e-merenda', 11, 'Inserisci la parola segreta che trovi in grassetto a pagina 11', 'sostenibili', true),
-      ('colazione-e-merenda', 75, 'Inserisci la parola segreta che trovi in grassetto a pagina 75', 'dolcezza', true),
+      ('colazione-e-merenda', 5, 'Inserisci la parola segreta che trovi in rosso a pagina 5 e inseriscila in minuscolo', 'complicati', true),
+      ('colazione-e-merenda', 6, 'Inserisci la parola segreta che trovi in rosso a pagina 6 e inseriscila in minuscolo', 'irresistibile', true),
+      ('colazione-e-merenda', 10, 'Inserisci la parola segreta che trovi in rosso a pagina 10 e inseriscila in minuscolo', 'cruciale', true),
+      ('colazione-e-merenda', 11, 'Inserisci la parola segreta che trovi in rosso a pagina 11 e inseriscila in minuscolo', 'sostenibili', true),
+      ('colazione-e-merenda', 75, 'Inserisci la parola segreta che trovi in rosso a pagina 75 e inseriscila in minuscolo', 'dolcezza', true),
 
-      ('ricette-e-autosvezzamento-felice', 16, 'Inserisci la parola segreta che trovi in grassetto a pagina 16', 'precocemente', true),
-      ('ricette-e-autosvezzamento-felice', 20, 'Inserisci la parola segreta che trovi in grassetto a pagina 20', 'improvvisazioni', true),
-      ('ricette-e-autosvezzamento-felice', 25, 'Inserisci la parola segreta che trovi in grassetto a pagina 25', 'potente', true),
-      ('ricette-e-autosvezzamento-felice', 28, 'Inserisci la parola segreta che trovi in grassetto a pagina 28', 'fiducia', true),
-      ('ricette-e-autosvezzamento-felice', 31, 'Inserisci la parola segreta che trovi in grassetto a pagina 31', 'cruciale', true)
+      ('ricette-e-autosvezzamento-felice', 16, 'Inserisci la parola segreta che trovi in rosso a pagina 16 e inseriscila in minuscolo', 'precocemente', true),
+      ('ricette-e-autosvezzamento-felice', 20, 'Inserisci la parola segreta che trovi in rosso a pagina 20 e inseriscila in minuscolo', 'improvvisazioni', true),
+      ('ricette-e-autosvezzamento-felice', 25, 'Inserisci la parola segreta che trovi in rosso a pagina 25 e inseriscila in minuscolo', 'potente', true),
+      ('ricette-e-autosvezzamento-felice', 28, 'Inserisci la parola segreta che trovi in rosso a pagina 28 e inseriscila in minuscolo', 'fiducia', true),
+      ('ricette-e-autosvezzamento-felice', 31, 'Inserisci la parola segreta che trovi in rosso a pagina 31 e inseriscila in minuscolo', 'cruciale', true)
   ) as t(book_slug, page_number, prompt_text, accepted_answer, is_active)
 )
 insert into public.book_access_challenges (

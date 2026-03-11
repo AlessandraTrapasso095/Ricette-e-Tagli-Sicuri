@@ -429,3 +429,41 @@ export async function revokeBookAccess(params: {
     },
   });
 }
+
+export async function grantBookAccess(params: {
+  adminUserId: string;
+  targetUserId: string;
+  bookId: string;
+  reason?: string;
+}) {
+  const admin = createSupabaseAdminClient();
+
+  const { error } = await admin.from("user_books").upsert(
+    {
+      user_id: params.targetUserId,
+      book_id: params.bookId,
+      status: "active",
+      unlocked_at: new Date().toISOString(),
+      revoked_at: null,
+      revoked_by: null,
+      notes: params.reason ?? null,
+      challenge_id: null,
+    },
+    { onConflict: "user_id,book_id" },
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  await admin.from("audit_logs").insert({
+    actor_user_id: params.adminUserId,
+    entity: "user_books",
+    entity_id: `${params.targetUserId}:${params.bookId}`,
+    action: "book_access_granted",
+    details: {
+      reason: params.reason ?? null,
+      source: "manual_admin",
+    },
+  });
+}

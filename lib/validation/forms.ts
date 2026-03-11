@@ -88,3 +88,78 @@ export const adminBookSchema = z.object({
   challengeCooldownMinutes: z.number().int().min(1).max(1440),
   isActive: z.boolean(),
 });
+
+export const adminBookCreateSchema = z.object({
+  title: z.string().min(3, "Titolo troppo breve.").max(120, "Titolo troppo lungo."),
+  subtitle: z.string().max(300, "Sottotitolo troppo lungo.").optional(),
+  link: z.string().url("Inserisci un link valido.").optional().or(z.literal("")),
+});
+
+export const adminBookUpdateSchema = z.object({
+  bookId: z.string().uuid("Libro non valido."),
+  title: z.string().min(3, "Titolo troppo breve.").max(120, "Titolo troppo lungo."),
+  subtitle: z.string().max(300, "Sottotitolo troppo lungo.").optional(),
+  link: z.string().url("Inserisci un link valido.").optional().or(z.literal("")),
+  isActive: z.boolean(),
+});
+
+export const adminBookDeleteSchema = z.object({
+  bookId: z.string().uuid("Libro non valido."),
+});
+
+export const adminBonusSchema = z.object({
+  id: z.string().uuid("Bonus non valido.").optional(),
+  bookId: z.string().uuid("Libro non valido."),
+  title: z.string().min(3, "Titolo troppo breve.").max(140, "Titolo troppo lungo."),
+  description: z.string().max(2000, "Descrizione troppo lunga.").optional(),
+  storageBucket: z.string().min(2).max(120).default("bonus-files"),
+  storagePath: z
+    .string()
+    .min(5, "Percorso storage troppo breve.")
+    .max(400, "Percorso storage troppo lungo.")
+    .regex(/^[a-z0-9/_\-.]+$/i, "Usa solo lettere, numeri, trattini, underscore e slash."),
+  mimeType: z.string().min(5).max(120).default("application/pdf"),
+  isActive: z.boolean(),
+});
+
+export const adminBonusStatusSchema = z.object({
+  bonusId: z.string().uuid("Bonus non valido."),
+  isActive: z.boolean(),
+});
+
+export const adminBonusDeleteSchema = z.object({
+  bonusId: z.string().uuid("Bonus non valido."),
+});
+
+export const adminBookAccessSchema = z.object({
+  targetUserId: z.string().uuid("Utente non valido."),
+  bookId: z.string().uuid("Libro non valido."),
+  reason: z.string().max(300, "Nota troppo lunga.").optional(),
+});
+
+export const adminUserSuspendSchema = z.object({
+  userId: z.string().uuid("Utente non valido."),
+  duration: z.enum(["1h", "24h", "168h", "permanent", "none"]),
+});
+
+export const adminBroadcastSchema = z.object({
+  subject: z.string().min(3, "Oggetto troppo breve.").max(160, "Oggetto troppo lungo."),
+  message: z.string().min(10, "Messaggio troppo breve.").max(12000, "Messaggio troppo lungo."),
+});
+
+export const supportTicketStatusSchema = z.enum(["inviato", "in_lavorazione", "risolto", "chiuso"]);
+export const supportTicketCategorySchema = z.enum(["accesso", "bonus", "chat_menu", "tecnico", "altro"]);
+
+export const adminSupportTicketFiltersSchema = z.object({
+  status: z.enum(["all", "inviato", "in_lavorazione", "risolto", "chiuso"]).default("all"),
+  category: z.enum(["all", "accesso", "bonus", "chat_menu", "tecnico", "altro"]).default("all"),
+  q: z.string().max(120).optional(),
+});
+
+export const adminSupportTicketUpdateSchema = z.object({
+  ticketId: z.string().uuid("Ticket non valido."),
+  status: supportTicketStatusSchema,
+  adminNotes: z.string().max(4000, "Note admin troppo lunghe.").optional(),
+  replyMessage: z.string().max(4000, "Risposta troppo lunga.").optional(),
+  notifyUser: z.boolean().optional().default(false),
+});

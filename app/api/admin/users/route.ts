@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { adminUserSuspendSchema } from "@/lib/validation/forms";
 import { getApiUserOrResponse, ensureApiAdminOrResponse } from "@/server/auth/api-auth";
-import { getAdminUsersOverview } from "@/server/admin/admin-service";
+import { getAdminUsersOverview, setAdminUserSuspension } from "@/server/admin/admin-service";
 
 export async function GET() {
   const { user, unauthorizedResponse } = await getApiUserOrResponse();
@@ -9,11 +10,38 @@ export async function GET() {
     return unauthorizedResponse;
   }
 
-  const adminGuard = await ensureApiAdminOrResponse(user.id);
+  const adminGuard = await ensureApiAdminOrResponse(user.id, user.email);
   if (adminGuard) {
     return adminGuard;
   }
 
   const users = await getAdminUsersOverview();
   return NextResponse.json({ data: users });
+}
+
+export async function PATCH(request: Request) {
+  const { user, unauthorizedResponse } = await getApiUserOrResponse();
+  if (!user) {
+    return unauthorizedResponse;
+  }
+
+  const adminGuard = await ensureApiAdminOrResponse(user.id, user.email);
+  if (adminGuard) {
+    return adminGuard;
+  }
+
+  const body = await request.json();
+  const parsed = adminUserSuspendSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Input non valido" }, { status: 400 });
+  }
+
+  await setAdminUserSuspension({
+    adminUserId: user.id,
+    userId: parsed.data.userId,
+    duration: parsed.data.duration,
+  });
+
+  return NextResponse.json({ ok: true });
 }

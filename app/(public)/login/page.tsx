@@ -4,6 +4,7 @@ import { LoginForm } from "@/components/forms/login-form";
 import { ResetPasswordForm } from "@/components/forms/reset-password-form";
 import { Card } from "@/components/ui/card";
 import { getCurrentUser } from "@/server/auth/session";
+import { getPostLoginPath } from "@/server/auth/post-login-path";
 
 export const metadata = {
   title: "Accedi | Ricette e Tagli Sicuri",
@@ -16,7 +17,8 @@ export default async function LoginPage({
 }) {
   const user = await getCurrentUser();
   if (user) {
-    redirect("/dashboard");
+    const path = await getPostLoginPath(user.id, user.email);
+    redirect(path);
   }
 
   const { reason } = await searchParams;

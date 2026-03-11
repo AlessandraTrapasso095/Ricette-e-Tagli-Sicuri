@@ -22,6 +22,6 @@ export const adminNavigation = [
   { href: "/admin/bonus", label: "Bonus" },
   { href: "/admin/utenti", label: "Utenti" },
   { href: "/admin/challenge", label: "Challenge" },
-  { href: "/admin/supporto", label: "Supporto" },
+  { href: "/admin/ticket", label: "Ticket" },
   { href: "/admin/impostazioni", label: "Impostazioni" },
 ];

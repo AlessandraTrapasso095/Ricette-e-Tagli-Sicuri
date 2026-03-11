@@ -3,7 +3,7 @@ import "server-only";
 import OpenAI from "openai";
 import { subDays } from "date-fns";
 
-import { MAX_DAILY_MENU_MODIFICATIONS, MENU_SESSION_RESET_TIMEZONE } from "@/config/chat-session";
+import { MENU_DAILY_MAX_ATTEMPTS, MENU_SESSION_RESET_TIMEZONE } from "@/config/chat-session";
 import { getEnv } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getStartOfDayInTimeZone } from "@/lib/timezone/day-boundary";
@@ -32,8 +32,32 @@ interface SavedMenuRow {
   created_at: string;
 }
 
+const MEAL_TYPES = ["colazione", "pranzo", "merenda", "cena"] as const;
+type MealType = (typeof MEAL_TYPES)[number];
+
+interface IngredientReplacement {
+  from: string;
+  to: string;
+}
+
+interface MealChangeRequest {
+  mealType: MealType;
+  requestedDish?: string;
+}
+
+interface ForcedMenuAdjustments {
+  replacements: IngredientReplacement[];
+  avoidTerms: string[];
+  mealChanges: MealChangeRequest[];
+  requiresVariation: boolean;
+}
+
 function getMenuDayStartIso() {
   return getStartOfDayInTimeZone(new Date(), MENU_SESSION_RESET_TIMEZONE).toISOString();
+}
+
+function buildDailyAttemptLimitMessage() {
+  return `Hai raggiunto il limite di ${MENU_DAILY_MAX_ATTEMPTS} tentativi giornalieri. Potrai riprovare dopo la mezzanotte.`;
 }
 
 async function archiveExpiredDailySessions(admin: AdminClient, userId: string, dayStartIso: string) {
@@ -46,6 +70,28 @@ async function archiveExpiredDailySessions(admin: AdminClient, userId: string, d
 
   if (error) {
     throw new Error("Impossibile aggiornare le sessioni giornaliere.");
+  }
+}
+
+async function assertDailyAttemptLimit(params: {
+  admin: AdminClient;
+  userId: string;
+  dayStartIso: string;
+}) {
+  const { count, error } = await params.admin
+    .from("menu_messages")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", params.userId)
+    .eq("role", "assistant")
+    .not("menu_payload", "is", null)
+    .gte("created_at", params.dayStartIso);
+
+  if (error) {
+    throw new Error("Impossibile verificare i tentativi giornalieri.");
+  }
+
+  if ((count ?? 0) >= MENU_DAILY_MAX_ATTEMPTS) {
+    throw new Error(buildDailyAttemptLimitMessage());
   }
 }
 
@@ -97,17 +143,51 @@ async function getLatestAssistantMenuFromSession(params: {
   return parsed.data;
 }
 
-function buildModificationPrompt(params: { userPrompt: string; previousMenu: DailyMenuSchema }) {
+function buildModificationPrompt(params: {
+  userPrompt: string;
+  previousMenu: DailyMenuSchema;
+  forcedAdjustments: ForcedMenuAdjustments;
+}) {
   const previousMeals = params.previousMenu.meals
     .map((meal) => `${meal.mealType}: ${meal.dishName} (${meal.ingredients.join(", ")})`)
     .join(" | ");
+
+  const intentLines: string[] = [];
+  if (params.forcedAdjustments.replacements.length > 0) {
+    intentLines.push(
+      `Sostituzioni obbligatorie: ${params.forcedAdjustments.replacements.map((item) => `${item.from} -> ${item.to}`).join("; ")}.`,
+    );
+  }
+  if (params.forcedAdjustments.avoidTerms.length > 0) {
+    intentLines.push(`Ingredienti da evitare: ${params.forcedAdjustments.avoidTerms.join(", ")}.`);
+  }
+  if (params.forcedAdjustments.mealChanges.length > 0) {
+    intentLines.push(
+      `Pasti da cambiare: ${params.forcedAdjustments.mealChanges
+        .map((item) => (item.requestedDish ? `${item.mealType} -> ${item.requestedDish}` : item.mealType))
+        .join("; ")}.`,
+    );
+  }
+  if (params.forcedAdjustments.requiresVariation) {
+    intentLines.push("Il nuovo menu deve essere realmente diverso dal precedente.");
+  }
 
   return [
     "Modifica il menu precedente rispettando tutte le regole obbligatorie della piattaforma.",
     `Menu precedente: ${previousMeals}`,
     `Richiesta di modifica del genitore: ${params.userPrompt}`,
+    ...intentLines,
     "Mantieni struttura giornaliera completa (colazione, pranzo, merenda, cena), bilanciamento e sicurezza.",
   ].join("\n");
+}
+
+function hasExplicitModificationIntent(forced: ForcedMenuAdjustments) {
+  return (
+    forced.replacements.length > 0 ||
+    forced.avoidTerms.length > 0 ||
+    forced.mealChanges.length > 0 ||
+    forced.requiresVariation
+  );
 }
 
 function hasForbiddenTerm(text: string, forbiddenTerms: string[]) {
@@ -128,11 +208,427 @@ function pickAllowedOption(options: string[], forbiddenTerms: string[], fallback
   return fallback;
 }
 
+function dedupeValues(values: string[]) {
+  const seen = new Set<string>();
+  const output: string[] = [];
+
+  for (const value of values) {
+    const key = normalizeFreeText(value);
+    if (!key || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    output.push(value);
+  }
+
+  return output;
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function cleanPromptTerm(raw: string) {
+  return normalizeFreeText(raw)
+    .replace(/^(?:il|lo|la|i|gli|le|un|uno|una)\s+/, "")
+    .replace(/^(?:questo|questa|quello|quella|questi|queste|quelli|quelle)\s+/, "")
+    .replace(/^(?:quello|quella|quelli|quelle)\s+di\s+/, "")
+    .replace(/^di\s+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isMealType(value: string): value is MealType {
+  return MEAL_TYPES.includes(value as MealType);
+}
+
+function containsTermInText(text: string, term: string) {
+  const normalizedText = normalizeFreeText(text);
+  const normalizedTerm = cleanPromptTerm(term);
+  if (!normalizedTerm) {
+    return false;
+  }
+
+  return normalizedText.includes(normalizedTerm);
+}
+
+function mealToText(meal: DailyMenuSchema["meals"][number]) {
+  return [
+    meal.dishName,
+    meal.ingredients.join(" "),
+    meal.preparation,
+    meal.notes.join(" "),
+    meal.safetyNotes.join(" "),
+    meal.substitutions.join(" "),
+    meal.balancedPlate?.carbs ?? "",
+    meal.balancedPlate?.proteins ?? "",
+    meal.balancedPlate?.vegetables ?? "",
+    meal.balancedPlate?.healthyFats ?? "",
+  ].join(" ");
+}
+
+function menuToFullText(menu: DailyMenuSchema) {
+  return menu.meals.map((meal) => mealToText(meal)).join(" ");
+}
+
+function containsTermInMeal(meal: DailyMenuSchema["meals"][number], term: string) {
+  return containsTermInText(mealToText(meal), term);
+}
+
+function applyTextReplacements(input: string, replacements: IngredientReplacement[]) {
+  return replacements.reduce((acc, replacement) => {
+    if (!replacement.from || !replacement.to) {
+      return acc;
+    }
+
+    const pattern = new RegExp(escapeRegExp(replacement.from), "gi");
+    return acc.replace(pattern, replacement.to);
+  }, input);
+}
+
+function applyReplacementsToMeal(meal: DailyMenuSchema["meals"][number], replacements: IngredientReplacement[]) {
+  if (replacements.length === 0) {
+    return meal;
+  }
+
+  return {
+    ...meal,
+    dishName: applyTextReplacements(meal.dishName, replacements),
+    ingredients: dedupeValues(meal.ingredients.map((item) => applyTextReplacements(item, replacements))),
+    preparation: applyTextReplacements(meal.preparation, replacements),
+    notes: meal.notes.map((note) => applyTextReplacements(note, replacements)),
+    safetyNotes: meal.safetyNotes.map((note) => applyTextReplacements(note, replacements)),
+    substitutions: meal.substitutions.map((item) => applyTextReplacements(item, replacements)),
+    balancedPlate: meal.balancedPlate
+      ? {
+          carbs: applyTextReplacements(meal.balancedPlate.carbs, replacements),
+          proteins: applyTextReplacements(meal.balancedPlate.proteins, replacements),
+          vegetables: applyTextReplacements(meal.balancedPlate.vegetables, replacements),
+          healthyFats: applyTextReplacements(meal.balancedPlate.healthyFats, replacements),
+        }
+      : meal.balancedPlate,
+  };
+}
+
+function getMealSignature(meal: DailyMenuSchema["meals"][number]) {
+  const ingredients = [...meal.ingredients].map((value) => normalizeFreeText(value)).sort().join(",");
+  return `${meal.mealType}:${normalizeFreeText(meal.dishName)}:${ingredients}`;
+}
+
+function buildAlternativeMeal(params: {
+  mealType: MealType;
+  policy: MenuPolicyContext;
+  requestedDish?: string;
+}): DailyMenuSchema["meals"][number] {
+  const requestedDish = params.requestedDish ? cleanPromptTerm(params.requestedDish) : undefined;
+  const prefersVellutata = requestedDish ? containsTermInText(requestedDish, "vellutata") || containsTermInText(requestedDish, "crema") : false;
+
+  if (params.mealType === "colazione") {
+    const fruit = pickAllowedOption(["Pera", "Banana", "Mela"], params.policy.forbiddenTerms, "Pera");
+    const dishName = requestedDish ? `${requestedDish} con ${fruit.toLowerCase()}` : `Porridge morbido con ${fruit.toLowerCase()}`;
+
+    return {
+      mealType: "colazione",
+      dishName,
+      ingredients: ["Fiocchi di avena", "Latte o yogurt naturale", fruit],
+      preparation: `Prepara una base morbida e aggiungi ${fruit.toLowerCase()} ben schiacciata.`,
+      notes: ["Colazione semplice e nutriente, senza zucchero aggiunto."],
+      safetyNotes: ["Servi tiepido e con consistenza morbida."],
+      substitutions: ["Puoi usare altra frutta morbida di stagione."],
+    };
+  }
+
+  if (params.mealType === "merenda") {
+    const fruit = pickAllowedOption(["Pera", "Banana", "Mela cotta"], params.policy.forbiddenTerms, "Pera");
+    const dishName = requestedDish ? requestedDish : "Merenda yogurt e frutta morbida";
+
+    return {
+      mealType: "merenda",
+      dishName,
+      ingredients: ["Yogurt bianco intero", fruit],
+      preparation: `Unisci yogurt e ${fruit.toLowerCase()} in consistenza omogenea.`,
+      notes: ["Merenda leggera, naturale e senza zuccheri aggiunti."],
+      safetyNotes: ["Controlla che non ci siano pezzi duri."],
+      substitutions: ["In alternativa pane morbido con crema 100% frutta secca (in forma sicura)."],
+    };
+  }
+
+  const carb = pickAllowedOption(
+    params.mealType === "pranzo" ? ["Riso", "Pasta formato piccolo", "Miglio"] : ["Patata", "Orzo", "Pasta corta"],
+    params.policy.forbiddenTerms,
+    "Riso",
+  );
+  const protein = pickAllowedOption(
+    ["Tacchino", "Lenticchie decorticate", "Ricotta vaccina", "Ceci decorticati"],
+    params.policy.forbiddenTerms,
+    "Lenticchie decorticate",
+  );
+  const vegetable = pickAllowedOption(["Zucca", "Zucchine", "Carota", "Piselli"], params.policy.forbiddenTerms, "Zucca");
+
+  const makeClassico = params.policy.feedingStyle === "classico" || prefersVellutata;
+  const makeAuto = params.policy.feedingStyle === "autosvezzamento";
+  const dishName = requestedDish
+    ? requestedDish
+    : makeClassico
+      ? `Vellutata di ${vegetable.toLowerCase()} con ${protein.toLowerCase()}`
+      : `Piatto morbido di ${carb.toLowerCase()} con ${protein.toLowerCase()} e ${vegetable.toLowerCase()}`;
+
+  return {
+    mealType: params.mealType,
+    dishName,
+    ingredients: [carb, protein, vegetable],
+    preparation: makeClassico
+      ? `Cuoci ${carb.toLowerCase()} e ${vegetable.toLowerCase()}, aggiungi ${protein.toLowerCase()} e frulla in crema morbida.`
+      : `Cuoci ${carb.toLowerCase()} e ${vegetable.toLowerCase()}, unisci ${protein.toLowerCase()} in consistenza morbida e servila in tagli sicuri.`,
+    notes: [
+      "Completa con olio EVO a crudo.",
+      makeAuto ? "Forma e servizio in tagli sicuri/finger food." : "Consistenza morbida e facilmente gestibile.",
+    ],
+    safetyNotes: [
+      "Bambino seduto, schiena dritta e supervisione adulta.",
+      makeAuto ? "Tagli sicuri adeguati all'età." : "Evita pezzi duri o di grande dimensione.",
+    ],
+    substitutions: ["Puoi sostituire la verdura con altra verdura di stagione."],
+    balancedPlate: {
+      carbs: params.policy.ageMonths !== null && params.policy.ageMonths >= 24 ? `1/4 ${carb.toLowerCase()}` : `2/4 ${carb.toLowerCase()}`,
+      proteins: `1/4 ${protein.toLowerCase()}`,
+      vegetables:
+        params.policy.ageMonths !== null && params.policy.ageMonths >= 24 ? `2/4 ${vegetable.toLowerCase()}` : `1/4 ${vegetable.toLowerCase()}`,
+      healthyFats: "olio EVO a crudo",
+    },
+  };
+}
+
+function pickReplacementForAvoidTerm(avoidTerm: string, policy: MenuPolicyContext) {
+  const term = cleanPromptTerm(avoidTerm);
+  if (term.includes("pollo")) return "tacchino";
+  if (term.includes("pasta")) return "riso";
+  if (term.includes("riso")) return "crema mais e tapioca";
+  if (term.includes("zucchin")) return "zucca";
+  if (term.includes("uovo")) return "ricotta vaccina";
+  if (term.includes("latte")) return "yogurt naturale";
+
+  return pickAllowedOption(["zucca", "carota", "patata", "lenticchie decorticate"], [term, ...policy.forbiddenTerms], "zucca");
+}
+
+function getForcedMenuAdjustments(userPrompt: string): ForcedMenuAdjustments {
+  const normalizedPrompt = normalizeFreeText(userPrompt);
+  const replacements: IngredientReplacement[] = [];
+  const avoidTerms = new Set<string>();
+  const mealChangesMap = new Map<MealType, MealChangeRequest>();
+  let requiresVariation = /(?:proponimi|proponi)\s+altro|qualcos'?altro|menu diverso|cambia menu|fammi altro/.test(normalizedPrompt);
+
+  const replacementRegex =
+    /sostituisci\s+(.+?)\s+(?:al posto di|invece di|con il|con la|con lo|con i|con le|col|con)\s+(.+?)(?=,|\.|;|!|\?|$)/g;
+  for (const match of normalizedPrompt.matchAll(replacementRegex)) {
+    const from = cleanPromptTerm(match[1] ?? "");
+    const to = cleanPromptTerm(match[2] ?? "");
+    if (!from || !to) {
+      continue;
+    }
+
+    if (isMealType(from)) {
+      mealChangesMap.set(from, { mealType: from, requestedDish: to });
+    } else {
+      replacements.push({ from, to });
+    }
+    requiresVariation = true;
+  }
+
+  const mealWithTargetRegex =
+    /(?:cambia|modifica|rifai|proponi)\s+(?:la|il)?\s*(colazione|pranzo|merenda|cena)\s+(?:con|in)\s+(.+?)(?=,|\.|;|!|\?|$)/g;
+  for (const match of normalizedPrompt.matchAll(mealWithTargetRegex)) {
+    const mealType = cleanPromptTerm(match[1] ?? "");
+    const requestedDish = cleanPromptTerm(match[2] ?? "");
+
+    if (isMealType(mealType)) {
+      mealChangesMap.set(mealType, {
+        mealType,
+        requestedDish: requestedDish || undefined,
+      });
+      requiresVariation = true;
+    }
+  }
+
+  for (const mealType of MEAL_TYPES) {
+    const mealRegex = new RegExp(`(?:cambia|modifica|sostituisci|proponi|rifai)\\s+(?:la|il)?\\s*${mealType}(?:\\b|$)`);
+    if (mealRegex.test(normalizedPrompt) && !mealChangesMap.has(mealType)) {
+      mealChangesMap.set(mealType, { mealType });
+      requiresVariation = true;
+    }
+  }
+
+  const haveNotRegex = /ho\s+(.+?)\s+e\s+non\s+(.+?)(?=,|\.|;|!|\?|$)/g;
+  for (const match of normalizedPrompt.matchAll(haveNotRegex)) {
+    const preferred = cleanPromptTerm(match[1] ?? "");
+    const notAvailable = cleanPromptTerm(match[2] ?? "");
+
+    if (notAvailable) {
+      avoidTerms.add(notAvailable);
+    }
+    if (preferred && notAvailable) {
+      replacements.push({ from: notAvailable, to: preferred });
+      requiresVariation = true;
+    }
+  }
+
+  const nonHoRegex = /(?:non ho|non abbiamo)\s+(.+?)(?=,|\.|;|!|\?|$)/g;
+  for (const match of normalizedPrompt.matchAll(nonHoRegex)) {
+    const term = cleanPromptTerm(match[1] ?? "");
+    if (term) {
+      avoidTerms.add(term);
+    }
+  }
+
+  const genericAvoidRegex = /(?:senza|no)\s+(.+?)(?=,|\.|;|!|\?|$)/g;
+  for (const match of normalizedPrompt.matchAll(genericAvoidRegex)) {
+    const term = cleanPromptTerm(match[1] ?? "");
+    if (term) {
+      avoidTerms.add(term);
+    }
+  }
+
+  const uniqueReplacements: IngredientReplacement[] = [];
+  const replacementKeys = new Set<string>();
+  for (const replacement of replacements) {
+    const key = `${replacement.from}->${replacement.to}`;
+    if (replacementKeys.has(key) || replacement.from === replacement.to) {
+      continue;
+    }
+    replacementKeys.add(key);
+    uniqueReplacements.push(replacement);
+  }
+
+  return {
+    replacements: uniqueReplacements,
+    avoidTerms: [...avoidTerms],
+    mealChanges: [...mealChangesMap.values()],
+    requiresVariation,
+  };
+}
+
+function applyForcedAdjustments(
+  menu: DailyMenuSchema,
+  policy: MenuPolicyContext,
+  forced: ForcedMenuAdjustments,
+  previousMenu?: DailyMenuSchema,
+): DailyMenuSchema {
+  let meals = menu.meals.map((meal) => applyReplacementsToMeal(meal, forced.replacements));
+  const warnings: string[] = [...menu.warnings];
+
+  for (const mealChange of forced.mealChanges) {
+    const index = meals.findIndex((meal) => meal.mealType === mealChange.mealType);
+    if (index === -1) {
+      continue;
+    }
+
+    const currentMeal = meals[index];
+    const previousMeal = previousMenu?.meals.find((meal) => meal.mealType === mealChange.mealType);
+    const requestedMissing = mealChange.requestedDish ? !containsTermInMeal(currentMeal, mealChange.requestedDish) : false;
+
+    if (requestedMissing) {
+      meals[index] = buildAlternativeMeal({
+        mealType: mealChange.mealType,
+        policy,
+        requestedDish: mealChange.requestedDish,
+      });
+      warnings.push(`Pasto ${mealChange.mealType} aggiornato con richiesta: ${mealChange.requestedDish}.`);
+    }
+
+    if (previousMeal && getMealSignature(meals[index]) === getMealSignature(previousMeal)) {
+      meals[index] = buildAlternativeMeal({
+        mealType: mealChange.mealType,
+        policy,
+        requestedDish: mealChange.requestedDish,
+      });
+      warnings.push(`Pasto ${mealChange.mealType} rigenerato con una variante alternativa.`);
+    }
+  }
+
+  for (const avoidTerm of forced.avoidTerms) {
+    const currentText = menuToFullText({ ...menu, meals });
+    if (!containsTermInText(currentText, avoidTerm)) {
+      continue;
+    }
+
+    const replacement = pickReplacementForAvoidTerm(avoidTerm, policy);
+    meals = meals.map((meal) => applyReplacementsToMeal(meal, [{ from: avoidTerm, to: replacement }]));
+    warnings.push(`Ingrediente non disponibile sostituito automaticamente: ${avoidTerm} -> ${replacement}.`);
+  }
+
+  if (forced.requiresVariation && previousMenu && isSameMenuAsPrevious({ ...menu, meals }, previousMenu)) {
+    const targetMeal = forced.mealChanges[0]?.mealType ?? "cena";
+    const index = meals.findIndex((meal) => meal.mealType === targetMeal);
+    if (index !== -1) {
+      meals[index] = buildAlternativeMeal({
+        mealType: targetMeal,
+        policy,
+        requestedDish: forced.mealChanges[0]?.requestedDish,
+      });
+      warnings.push(`Menu variato automaticamente sul pasto ${targetMeal}.`);
+    }
+  }
+
+  return {
+    ...menu,
+    meals,
+    shoppingList: dedupeValues(meals.flatMap((meal) => meal.ingredients)),
+    warnings: dedupeValues(warnings),
+  };
+}
+
+function evaluateForcedAdjustments(
+  menu: DailyMenuSchema,
+  previousMenu: DailyMenuSchema | undefined,
+  forced: ForcedMenuAdjustments,
+) {
+  const issues: string[] = [];
+  const menuText = menuToFullText(menu);
+
+  for (const replacement of forced.replacements) {
+    if (containsTermInText(menuText, replacement.from)) {
+      issues.push(`La sostituzione richiesta non è completa: rimuovi "${replacement.from}".`);
+    }
+    if (!containsTermInText(menuText, replacement.to)) {
+      issues.push(`La sostituzione richiesta non è stata applicata: inserisci "${replacement.to}".`);
+    }
+  }
+
+  for (const avoidTerm of forced.avoidTerms) {
+    if (containsTermInText(menuText, avoidTerm)) {
+      issues.push(`Ingrediente non disponibile ancora presente nel menu: "${avoidTerm}".`);
+    }
+  }
+
+  for (const mealChange of forced.mealChanges) {
+    const currentMeal = menu.meals.find((meal) => meal.mealType === mealChange.mealType);
+    const previousMeal = previousMenu?.meals.find((meal) => meal.mealType === mealChange.mealType);
+
+    if (!currentMeal) {
+      issues.push(`Manca il pasto ${mealChange.mealType} nel menu aggiornato.`);
+      continue;
+    }
+
+    if (mealChange.requestedDish && !containsTermInMeal(currentMeal, mealChange.requestedDish)) {
+      issues.push(`Il pasto ${mealChange.mealType} non rispetta la richiesta "${mealChange.requestedDish}".`);
+    }
+
+    if (previousMeal && getMealSignature(currentMeal) === getMealSignature(previousMeal)) {
+      issues.push(`Il pasto ${mealChange.mealType} non è stato modificato rispetto al menu precedente.`);
+    }
+  }
+
+  if (forced.requiresVariation && previousMenu && isSameMenuAsPrevious(menu, previousMenu)) {
+    issues.push("Il menu risulta ancora uguale al precedente: proponi una variante diversa.");
+  }
+
+  return issues;
+}
+
 function menuSignature(menu: DailyMenuSchema) {
   return menu.meals
     .map((meal) => {
-      const ingredients = [...meal.ingredients].map((value) => normalizeFreeText(value)).sort().join(",");
-      return `${meal.mealType}:${normalizeFreeText(meal.dishName)}:${ingredients}`;
+      return getMealSignature(meal);
     })
     .sort()
     .join("|");
@@ -140,21 +636,6 @@ function menuSignature(menu: DailyMenuSchema) {
 
 function isSameMenuAsPrevious(currentMenu: DailyMenuSchema, previousMenu: DailyMenuSchema) {
   return menuSignature(currentMenu) === menuSignature(previousMenu);
-}
-
-async function getTodaySessionCount(admin: AdminClient, userId: string, dayStartIso: string) {
-  const { count, error } = await admin
-    .from("menu_sessions")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("is_archived", false)
-    .gte("created_at", dayStartIso);
-
-  if (error) {
-    throw new Error("Impossibile verificare il limite modifiche giornaliere.");
-  }
-
-  return count ?? 0;
 }
 
 function menuToMessageText(menu: DailyMenuSchema) {
@@ -172,6 +653,7 @@ function fallbackMenu(
     issues?: string[];
     previousMenu?: DailyMenuSchema;
     isModification?: boolean;
+    forcedAdjustments?: ForcedMenuAdjustments;
   },
 ): DailyMenuSchema {
   const issues = options?.issues ?? [];
@@ -224,7 +706,7 @@ function fallbackMenu(
     warnings.push("Menu aggiornato in base alla tua richiesta di modifica.");
   }
 
-  return {
+  const menu: DailyMenuSchema = {
     title: "Menu giornaliero bilanciato",
     childProfileSummary,
     meals: [
@@ -298,6 +780,13 @@ function fallbackMenu(
       dinnerVegetable,
     ],
   };
+
+  return applyForcedAdjustments(
+    menu,
+    policy,
+    options?.forcedAdjustments ?? { replacements: [], avoidTerms: [], mealChanges: [], requiresVariation: false },
+    options?.previousMenu,
+  );
 }
 
 function buildRetryPrompt(userPrompt: string, issues: string[]) {
@@ -309,6 +798,21 @@ function buildRetryPrompt(userPrompt: string, issues: string[]) {
   ].join("\n");
 }
 
+function buildDeterministicModifiedMenu(params: {
+  previousMenu: DailyMenuSchema;
+  childProfileSummary: DailyMenuSchema["childProfileSummary"];
+  policy: MenuPolicyContext;
+  forcedAdjustments: ForcedMenuAdjustments;
+}) {
+  const baseMenu: DailyMenuSchema = {
+    ...params.previousMenu,
+    title: "Menu giornaliero aggiornato",
+    childProfileSummary: params.childProfileSummary,
+  };
+
+  return applyForcedAdjustments(baseMenu, params.policy, params.forcedAdjustments, params.previousMenu);
+}
+
 async function generateDailyMenuWithOpenAI(params: {
   systemPrompt: string;
   childProfileSummary: DailyMenuSchema["childProfileSummary"];
@@ -316,13 +820,39 @@ async function generateDailyMenuWithOpenAI(params: {
   policy: MenuPolicyContext;
   previousMenu?: DailyMenuSchema;
   isModification?: boolean;
+  forcedAdjustments: ForcedMenuAdjustments;
 }) {
+  if (params.previousMenu && hasExplicitModificationIntent(params.forcedAdjustments)) {
+    const deterministicMenu = buildDeterministicModifiedMenu({
+      previousMenu: params.previousMenu,
+      childProfileSummary: params.childProfileSummary,
+      policy: params.policy,
+      forcedAdjustments: params.forcedAdjustments,
+    });
+
+    const deterministicIssues: string[] = [];
+    if (!hasCompleteMeals(deterministicMenu)) {
+      deterministicIssues.push("Il menu deve includere esattamente colazione, pranzo, merenda e cena.");
+    }
+
+    const deterministicValidation = validateDailyMenu(deterministicMenu, params.policy);
+    if (!deterministicValidation.isValid) {
+      deterministicIssues.push(...deterministicValidation.issues);
+    }
+    deterministicIssues.push(...evaluateForcedAdjustments(deterministicMenu, params.previousMenu, params.forcedAdjustments));
+
+    if (!isSameMenuAsPrevious(deterministicMenu, params.previousMenu) && deterministicIssues.length === 0) {
+      return deterministicMenu;
+    }
+  }
+
   const apiKey = getEnv("OPENAI_API_KEY");
 
   if (!apiKey) {
     return fallbackMenu(params.childProfileSummary, params.policy, {
       previousMenu: params.previousMenu,
       isModification: params.isModification,
+      forcedAdjustments: params.forcedAdjustments,
     });
   }
 
@@ -356,22 +886,24 @@ async function generateDailyMenuWithOpenAI(params: {
     try {
       const outputText = response.output_text;
       const parsed = dailyMenuSchema.parse(JSON.parse(outputText));
+      const adjustedMenu = applyForcedAdjustments(parsed, params.policy, params.forcedAdjustments, params.previousMenu);
       const issues: string[] = [];
 
-      if (!hasCompleteMeals(parsed)) {
+      if (!hasCompleteMeals(adjustedMenu)) {
         issues.push("Il menu deve includere esattamente colazione, pranzo, merenda e cena.");
       }
 
-      const validation = validateDailyMenu(parsed, params.policy);
+      const validation = validateDailyMenu(adjustedMenu, params.policy);
       if (!validation.isValid) {
         issues.push(...validation.issues);
       }
-      if (params.previousMenu && isSameMenuAsPrevious(parsed, params.previousMenu)) {
+      issues.push(...evaluateForcedAdjustments(adjustedMenu, params.previousMenu, params.forcedAdjustments));
+      if (params.previousMenu && isSameMenuAsPrevious(adjustedMenu, params.previousMenu)) {
         issues.push("Il menu è troppo simile al precedente: cambia ingredienti principali e almeno due piatti.");
       }
 
       if (issues.length === 0) {
-        return parsed;
+        return adjustedMenu;
       }
 
       lastIssues = issues;
@@ -386,6 +918,7 @@ async function generateDailyMenuWithOpenAI(params: {
     issues: lastIssues,
     previousMenu: params.previousMenu,
     isModification: params.isModification,
+    forcedAdjustments: params.forcedAdjustments,
   });
 }
 
@@ -485,6 +1018,11 @@ export async function generateMenuFromPrompt(params: {
   const dayStartIso = getMenuDayStartIso();
 
   await archiveExpiredDailySessions(admin, params.userId, dayStartIso);
+  await assertDailyAttemptLimit({
+    admin,
+    userId: params.userId,
+    dayStartIso,
+  });
 
   if (params.sessionId && params.sourceSessionId) {
     throw new Error("Richiesta non valida: usa sessionId oppure sourceSessionId.");
@@ -495,16 +1033,11 @@ export async function generateMenuFromPrompt(params: {
   const childProfileSummary = buildChildProfileSummary(child, policy);
   const childSummaryForPrompt = buildChildProfilePromptSummary(child, policy);
   const proteinRotationHint = await getProteinRotationHintForUser(params.userId);
+  const forcedAdjustments = getForcedMenuAdjustments(params.prompt);
   let promptForModel = params.prompt;
   let previousMenuForModification: DailyMenuSchema | undefined;
 
   if (params.sourceSessionId) {
-    const todaySessionCount = await getTodaySessionCount(admin, params.userId, dayStartIso);
-    const todayModificationCount = Math.max(0, todaySessionCount - 1);
-    if (todayModificationCount >= MAX_DAILY_MENU_MODIFICATIONS) {
-      throw new Error("Hai raggiunto il limite massimo di 3 modifiche menu per oggi. Da mezzanotte potrai modificarlo di nuovo.");
-    }
-
     await ensureSessionIsAvailableToday({
       admin,
       userId: params.userId,
@@ -523,6 +1056,7 @@ export async function generateMenuFromPrompt(params: {
       promptForModel = buildModificationPrompt({
         userPrompt: params.prompt,
         previousMenu,
+        forcedAdjustments,
       });
     }
   }
@@ -574,6 +1108,7 @@ export async function generateMenuFromPrompt(params: {
     policy,
     previousMenu: previousMenuForModification,
     isModification: Boolean(params.sourceSessionId),
+    forcedAdjustments,
   });
   const assistantText = menuToMessageText(menu);
 

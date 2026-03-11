@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
@@ -24,6 +24,21 @@ interface AdminChallengesTableProps {
 export function AdminChallengesTable({ initialChallenges }: AdminChallengesTableProps) {
   const [rows, setRows] = useState(initialChallenges);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  const rowsByBook = useMemo(() => {
+    const grouped = new Map<string, ChallengeRow[]>();
+
+    rows.forEach((row) => {
+      const key = row.books.id;
+      const existing = grouped.get(key) ?? [];
+      grouped.set(key, [...existing, row]);
+    });
+
+    return [...grouped.entries()].map(([, challenges]) => ({
+      book: challenges[0].books,
+      challenges: [...challenges].sort((a, b) => a.page_number - b.page_number),
+    }));
+  }, [rows]);
 
   async function toggleRow(row: ChallengeRow) {
     setStatusMessage(null);
@@ -49,26 +64,34 @@ export function AdminChallengesTable({ initialChallenges }: AdminChallengesTable
 
   return (
     <Card>
-      <CardTitle>Challenge accesso</CardTitle>
-      <CardDescription>Attiva/disattiva challenge e monitora la copertura per libro.</CardDescription>
+      <CardTitle>Challenge di sblocco</CardTitle>
+      <CardDescription>Elenco challenge divise per libro con attivazione/disattivazione rapida.</CardDescription>
 
       {statusMessage ? <p className="mt-2 text-sm text-zinc-700">{statusMessage}</p> : null}
 
-      <div className="mt-4 space-y-3">
-        {rows.map((row) => (
-          <div key={row.id} className="rounded-2xl border border-zinc-200 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{row.books.title}</p>
-            <p className="mt-1 text-sm font-medium text-zinc-800">Pagina {row.page_number}</p>
-            <p className="text-sm text-zinc-600">{row.prompt_text}</p>
-            <div className="mt-2 flex items-center gap-2">
-              <span className={`text-xs font-semibold ${row.is_active ? "text-emerald-700" : "text-zinc-500"}`}>
-                {row.is_active ? "Attiva" : "Disattivata"}
-              </span>
-              <Button variant="secondary" onClick={() => toggleRow(row)}>
-                {row.is_active ? "Disattiva" : "Attiva"}
-              </Button>
+      <div className="mt-4 space-y-5">
+        {rowsByBook.map((group) => (
+          <section key={group.book.id} className="rounded-2xl border border-zinc-200 p-3">
+            <p className="text-sm font-semibold text-zinc-900">{group.book.title}</p>
+            <p className="text-xs text-zinc-500">{group.book.slug}</p>
+
+            <div className="mt-3 space-y-2">
+              {group.challenges.map((row) => (
+                <div key={row.id} className="rounded-xl border border-zinc-100 p-2.5">
+                  <p className="text-sm font-medium text-zinc-800">Pagina {row.page_number}</p>
+                  <p className="text-sm text-zinc-600">{row.prompt_text}</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className={`text-xs font-semibold ${row.is_active ? "text-emerald-700" : "text-zinc-500"}`}>
+                      {row.is_active ? "Attiva" : "Disattivata"}
+                    </span>
+                    <Button variant="secondary" onClick={() => toggleRow(row)}>
+                      {row.is_active ? "Disattiva" : "Attiva"}
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
+          </section>
         ))}
       </div>
     </Card>

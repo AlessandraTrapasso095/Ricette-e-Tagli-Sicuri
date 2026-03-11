@@ -32,6 +32,13 @@ export function extractCustomExclusions(userPrompt: string): string[] {
         candidates.add(value.split(" ").slice(0, 3).join(" "));
       }
     }
+
+    if (segment.includes("non ho ")) {
+      const value = segment.split("non ho ")[1]?.trim();
+      if (value) {
+        candidates.add(value.split(" ").slice(0, 4).join(" "));
+      }
+    }
   }
 
   return [...candidates].filter((item) => item.length >= 2);
@@ -41,14 +48,8 @@ function detectPreferences(userPrompt: string): string[] {
   const text = normalizeFreeText(userPrompt);
   const preferences: string[] = [];
 
-  if (text.includes("ho poco tempo") || text.includes("poco tempo")) {
-    preferences.push("Oggi poco tempo: preferire preparazioni rapide.");
-  }
   if (text.includes("fuori casa") || text.includes("siamo fuori")) {
     preferences.push("Oggi fuori casa: preferire pasti trasportabili e semplici.");
-  }
-  if (text.includes("solo pranzo e cena")) {
-    preferences.push("Richiesta pasti: focus su pranzo e cena.");
   }
   if (text.includes("in frigo") || text.includes("quello che ho")) {
     preferences.push("Usare ingredienti comuni e facilmente sostituibili in dispensa/frigo.");

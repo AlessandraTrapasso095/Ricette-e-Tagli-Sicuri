@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { hasActiveAdminRole } from "@/server/auth/admin-guard";
 
 import { BrandLogo } from "./logo";
 
@@ -10,11 +11,15 @@ export async function PublicHeader() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const isAdmin = user ? await hasActiveAdminRole(user.id, user.email) : false;
+  const privateHomeHref = isAdmin ? "/admin" : "/dashboard";
+  const privateHomeLabel = isAdmin ? "Admin" : "Dashboard";
+
   const navItems = user
     ? [
         { href: "/", label: "Home" },
         { href: "/faq", label: "FAQ" },
-        { href: "/dashboard", label: "Dashboard" },
+        { href: privateHomeHref, label: privateHomeLabel },
       ]
     : [
         { href: "/", label: "Home" },
@@ -26,7 +31,7 @@ export async function PublicHeader() {
   return (
     <header className="sticky top-0 z-30 border-b border-rose-100/80 bg-white/90 backdrop-blur">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
-        <BrandLogo href={user ? "/dashboard" : "/"} />
+        <BrandLogo href={user ? privateHomeHref : "/"} />
         <nav className="hidden items-center gap-6 md:flex">
           {navItems.map((item) => (
             <Link

@@ -11,6 +11,10 @@ describe("input-normalizer", () => {
     expect(extractCustomExclusions("Oggi senza uovo, no miele")).toEqual(["uovo", "miele"]);
   });
 
+  it("estrae anche ingredienti non disponibili dal prompt", () => {
+    expect(extractCustomExclusions("Non ho zucchine, oggi senza uovo")).toEqual(["zucchine", "uovo"]);
+  });
+
   it("rileva preferenze giornaliere pratiche", () => {
     const context = buildUserPromptContext("Ho poco tempo e siamo fuori casa, usa quello che ho in frigo");
     expect(context.detectedPreferences.length).toBeGreaterThanOrEqual(2);

@@ -42,7 +42,23 @@ export function LoginForm() {
         throw error;
       }
 
-      router.push("/dashboard");
+      let destination = "/dashboard";
+      try {
+        const targetResponse = await fetch("/api/auth/post-login-path", {
+          method: "GET",
+          cache: "no-store",
+        });
+        if (targetResponse.ok) {
+          const targetJson = (await targetResponse.json()) as { path?: string };
+          if (targetJson.path === "/admin" || targetJson.path === "/dashboard") {
+            destination = targetJson.path;
+          }
+        }
+      } catch {
+        destination = "/dashboard";
+      }
+
+      router.push(destination);
       router.refresh();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Credenziali non valide.");

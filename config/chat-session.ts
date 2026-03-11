@@ -1,2 +1,3 @@
 export const MENU_SESSION_RESET_TIMEZONE = "Europe/Rome";
-export const MAX_DAILY_MENU_MODIFICATIONS = 3;
+export const MENU_DAILY_MAX_ATTEMPTS = 5;
+export const MENU_SESSION_PANEL_VISIBLE_ITEMS = 5;

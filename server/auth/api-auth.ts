@@ -3,11 +3,18 @@ import "server-only";
 import { NextResponse } from "next/server";
 
 import { CHAT_ACCESS_REQUIRED_MESSAGE } from "@/config/chat-access";
+import { SUPPORT_ACCESS_REQUIRED_MESSAGE } from "@/config/support-access";
 import { getDisclaimerStatus } from "@/lib/disclaimer/get-disclaimer-status";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { hasActiveAdminRole } from "@/server/auth/admin-guard";
 import { getUserChatAccessStatus } from "@/server/chat/chat-access";
+import { getUserSupportAccessStatus } from "@/server/support/support-access";
 
-export async function getApiUserOrResponse(options?: { requireDisclaimer?: boolean; requireChatAccess?: boolean }) {
+export async function getApiUserOrResponse(options?: {
+  requireDisclaimer?: boolean;
+  requireChatAccess?: boolean;
+  requireSupportAccess?: boolean;
+}) {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -44,22 +51,26 @@ export async function getApiUserOrResponse(options?: { requireDisclaimer?: boole
     }
   }
 
+  if (options?.requireSupportAccess) {
+    const supportAccess = await getUserSupportAccessStatus(user.id);
+    if (!supportAccess.hasAccess) {
+      return {
+        user: null,
+        unauthorizedResponse: NextResponse.json({ error: SUPPORT_ACCESS_REQUIRED_MESSAGE }, { status: 403 }),
+      };
+    }
+  }
+
   return {
     user,
     unauthorizedResponse: null,
   };
 }
 
-export async function ensureApiAdminOrResponse(userId: string) {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("admin_users")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("is_active", true)
-    .maybeSingle();
+export async function ensureApiAdminOrResponse(userId: string, email?: string | null) {
+  const isAdmin = await hasActiveAdminRole(userId, email);
 
-  if (error || !data) {
+  if (!isAdmin) {
     return NextResponse.json({ error: "Accesso admin richiesto" }, { status: 403 });
   }
 
