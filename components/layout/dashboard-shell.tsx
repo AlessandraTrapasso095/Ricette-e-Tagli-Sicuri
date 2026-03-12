@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { BackNavButton } from "@/components/ui/back-nav-button";
+
 import { DashboardFooter } from "./dashboard-footer";
 import { BrandLogo } from "./logo";
 
@@ -14,7 +16,10 @@ export function DashboardShell({ children, rightTop }: DashboardShellProps) {
       <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         <header className="rounded-3xl border border-rose-100 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex items-center justify-between gap-3">
-            <BrandLogo href="/dashboard" />
+            <div className="flex items-center gap-2">
+              <BackNavButton fallbackHref="/" />
+              <BrandLogo href="/dashboard" />
+            </div>
             {rightTop ? <div>{rightTop}</div> : null}
           </div>
         </header>

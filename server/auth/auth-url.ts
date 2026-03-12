@@ -21,10 +21,15 @@ function parseHttpUrl(value: string | undefined) {
   }
 }
 
-export function resolveAppBaseUrl(request: Request) {
+export function resolveConfiguredAppBaseUrl() {
   const explicit = parseHttpUrl(getEnv("AUTH_REDIRECT_BASE_URL")) ?? parseHttpUrl(getEnv("APP_BASE_URL"));
+  return explicit?.origin ?? null;
+}
+
+export function resolveAppBaseUrl(request: Request) {
+  const explicit = resolveConfiguredAppBaseUrl();
   if (explicit) {
-    return explicit.origin;
+    return explicit;
   }
 
   return new URL(request.url).origin;

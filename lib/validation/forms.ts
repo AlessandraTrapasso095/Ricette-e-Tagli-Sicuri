@@ -147,6 +147,15 @@ export const adminBroadcastSchema = z.object({
   message: z.string().min(10, "Messaggio troppo breve.").max(12000, "Messaggio troppo lungo."),
 });
 
+export const adminReaderSettingsSchema = z.object({
+  readerDisplayName: z.string().min(2, "Inserisci almeno 2 caratteri.").max(80, "Nome troppo lungo."),
+});
+
+export const accountProfileSettingsSchema = z.object({
+  fullName: z.string().min(2, "Inserisci nome e cognome.").max(120, "Nome troppo lungo."),
+  displayName: z.string().min(2, "Inserisci almeno 2 caratteri.").max(60, "Nome utente troppo lungo."),
+});
+
 export const supportTicketStatusSchema = z.enum(["inviato", "in_lavorazione", "risolto", "chiuso"]);
 export const supportTicketCategorySchema = z.enum(["accesso", "bonus", "chat_menu", "tecnico", "altro"]);
 

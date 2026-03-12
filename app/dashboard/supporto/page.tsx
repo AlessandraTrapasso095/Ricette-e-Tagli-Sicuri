@@ -13,11 +13,11 @@ export default async function DashboardSupportoPage() {
   const supabase = await createSupabaseServerClient();
 
   const [profileResult, supportAccess] = await Promise.all([
-    supabase.from("profiles").select("full_name, email").eq("id", user.id).maybeSingle(),
+    supabase.from("profiles").select("display_name, full_name, email").eq("id", user.id).maybeSingle(),
     getUserSupportAccessStatus(user.id),
   ]);
 
-  const userName = profileResult.data?.full_name ?? "Lettore";
+  const userName = profileResult.data?.display_name ?? profileResult.data?.full_name ?? "Lettore";
   const userEmail = profileResult.data?.email ?? user.email ?? "";
 
   if (!supportAccess.hasAccess) {

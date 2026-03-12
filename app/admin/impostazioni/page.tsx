@@ -1,12 +1,25 @@
+import { AdminReaderSettingsForm } from "@/components/forms/admin-reader-settings-form";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getReaderFacingName } from "@/server/settings/app-settings-service";
 
 export default async function AdminImpostazioniPage() {
   const admin = createSupabaseAdminClient();
-  const { data: settings } = await admin.from("app_settings").select("key, value, description, updated_at").order("key");
+  const [readerFacingName, settingsResult] = await Promise.all([
+    getReaderFacingName(),
+    admin.from("app_settings").select("key, value, description, updated_at").order("key"),
+  ]);
+
+  const settings = settingsResult.data ?? [];
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardTitle>Impostazioni visibili ai lettori</CardTitle>
+        <CardDescription>Aggiorna il nome mostrato ai lettori nell&apos;header del brand.</CardDescription>
+        <AdminReaderSettingsForm initialReaderDisplayName={readerFacingName} />
+      </Card>
+
       <Card>
         <CardTitle>Impostazioni tecniche</CardTitle>
         <CardDescription>Configurazioni centralizzate dell&apos;app.</CardDescription>

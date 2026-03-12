@@ -16,7 +16,7 @@ export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient();
 
   const [profileResult, unlockedBooks, availableBonus, childProfile, chatAccess, recommendedBooks] = await Promise.all([
-    supabase.from("profiles").select("full_name, email").eq("id", user.id).maybeSingle(),
+    supabase.from("profiles").select("display_name, full_name, email").eq("id", user.id).maybeSingle(),
     getUserUnlockedBooks(user.id),
     getAvailableBonusFiles(user.id),
     getPrimaryChildProfile(user.id),
@@ -25,6 +25,7 @@ export default async function DashboardPage() {
   ]);
 
   const userName =
+    profileResult.data?.display_name ??
     profileResult.data?.full_name ??
     (typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : null) ??
     "Lettore";

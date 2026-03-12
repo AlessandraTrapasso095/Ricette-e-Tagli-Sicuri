@@ -3,6 +3,7 @@ import "server-only";
 import { getEnv } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { sendTransactionalEmail } from "@/server/email/transactional-sender";
+import { getReaderFacingName } from "@/server/settings/app-settings-service";
 
 function sanitizeName(name?: string | null) {
   const clean = name?.trim();
@@ -28,7 +29,19 @@ function getLogoUrl() {
   return `${appBaseUrl.replace(/\/$/, "")}/brand/logo-ricette-tagli-sicuri.png`;
 }
 
-function emailLayout({ title, body, ctaLabel, ctaHref }: { title: string; body: string; ctaLabel?: string; ctaHref?: string }) {
+function emailLayout({
+  title,
+  body,
+  ctaLabel,
+  ctaHref,
+  readerFacingName,
+}: {
+  title: string;
+  body: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+  readerFacingName: string;
+}) {
   const logoUrl = getLogoUrl();
   const ctaHtml =
     ctaLabel && ctaHref
@@ -55,7 +68,7 @@ function emailLayout({ title, body, ctaLabel, ctaHref }: { title: string; body: 
             }
             <td style="vertical-align:middle;">
               <p style="margin:0;font-size:17px;line-height:1.2;color:#881337;font-weight:700;">Ricette e Tagli Sicuri</p>
-              <p style="margin:2px 0 0;font-size:12px;line-height:1.2;color:#be185d;">di Lorena Mariani</p>
+              <p style="margin:2px 0 0;font-size:12px;line-height:1.2;color:#be185d;">di ${readerFacingName}</p>
             </td>
           </tr>
         </table>
@@ -75,6 +88,7 @@ export async function sendSignupVerificationEmail(params: {
   fullName?: string | null;
   confirmLink: string;
 }) {
+  const readerFacingName = await getReaderFacingName();
   const name = sanitizeName(params.fullName);
   const body = `
     <p style="margin:0 0 12px;">Ciao ${name},</p>
@@ -86,7 +100,7 @@ export async function sendSignupVerificationEmail(params: {
     </p>
     <p style="margin:0;">
       Ti aspetto in piattaforma, un abbraccio<br />
-      Lorena Mariani
+      ${readerFacingName}
     </p>
   `;
 
@@ -98,6 +112,7 @@ export async function sendSignupVerificationEmail(params: {
       body,
       ctaLabel: "Conferma la tua email",
       ctaHref: params.confirmLink,
+      readerFacingName,
     }),
   });
 }
@@ -108,6 +123,7 @@ export async function sendWelcomeEmailOnce(params: {
   fullName?: string | null;
   dashboardUrl: string;
 }) {
+  const readerFacingName = await getReaderFacingName();
   const admin = createSupabaseAdminClient();
   const { data: existing } = await admin
     .from("user_email_events")
@@ -139,6 +155,7 @@ export async function sendWelcomeEmailOnce(params: {
       body,
       ctaLabel: "Apri la dashboard",
       ctaHref: params.dashboardUrl,
+      readerFacingName,
     }),
   });
 

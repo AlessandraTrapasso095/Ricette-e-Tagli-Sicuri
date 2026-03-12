@@ -131,6 +131,13 @@ values
       'max_tokens', 1600
     ),
     'Configurazione base del motore chat menu.'
+  ),
+  (
+    'reader_facing_name',
+    jsonb_build_object(
+      'displayName', 'Lorena Mariani'
+    ),
+    'Nome mostrato ai lettori nell''header del brand.'
   )
 on conflict (key) do update
 set

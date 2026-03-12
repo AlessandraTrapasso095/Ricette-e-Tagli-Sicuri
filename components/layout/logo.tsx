@@ -1,7 +1,10 @@
 import Link from "next/link";
 import Image from "next/image";
+import { getReaderFacingName } from "@/server/settings/app-settings-service";
 
-export function BrandLogo({ compact = false, href = "/" }: { compact?: boolean; href?: string }) {
+export async function BrandLogo({ compact = false, href = "/" }: { compact?: boolean; href?: string }) {
+  const readerFacingName = await getReaderFacingName();
+
   return (
     <Link href={href} className="inline-flex items-center gap-3">
       <Image
@@ -15,7 +18,7 @@ export function BrandLogo({ compact = false, href = "/" }: { compact?: boolean; 
       {!compact ? (
         <span className="inline-flex flex-col leading-tight">
           <span className="font-heading text-lg font-semibold tracking-tight text-rose-900">Ricette e Tagli Sicuri</span>
-          <span className="text-[10px] font-medium text-rose-700/80">di Lorena Mariani</span>
+          <span className="text-[10px] font-medium text-rose-700/80">di {readerFacingName}</span>
         </span>
       ) : null}
     </Link>

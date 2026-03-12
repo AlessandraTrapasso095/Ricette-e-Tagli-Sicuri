@@ -30,8 +30,10 @@ export async function PublicHeader() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-rose-100/80 bg-white/90 backdrop-blur">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
-        <BrandLogo href={user ? privateHomeHref : "/"} />
+      <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+        <div className="-ml-2 sm:-ml-3 lg:-ml-4">
+          <BrandLogo href={user ? privateHomeHref : "/"} />
+        </div>
         <nav className="hidden items-center gap-6 md:flex">
           {navItems.map((item) => (
             <Link

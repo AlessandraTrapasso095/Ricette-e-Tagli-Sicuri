@@ -118,8 +118,8 @@ export function AdminOverviewPanels({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="sticky top-4 z-20 rounded-3xl border border-zinc-200 bg-white/95 p-3 shadow-sm backdrop-blur">
+    <div className="flex min-h-[560px] flex-col gap-4 lg:h-[calc(100svh-2.5rem)]">
+      <div className="sticky top-0 z-20 rounded-3xl border border-zinc-200 bg-white/95 p-3 shadow-sm backdrop-blur">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {OVERVIEW_CARDS.map((card) => {
             const isActive = activeSection === card.key;
@@ -143,83 +143,86 @@ export function AdminOverviewPanels({
         </div>
       </div>
 
-      {activeSection === "users" ? <AdminUsersTable users={users} books={books} /> : null}
+      <div className="min-h-0 overflow-y-auto pr-1">
+        {activeSection === "users" ? <AdminUsersTable users={users} books={books} /> : null}
 
-      {activeSection === "unlockedBooks" ? (
-        <Card>
-          <CardTitle>Libri sbloccati dagli utenti</CardTitle>
-          <CardDescription>Per ogni libro vedi quante persone lo hanno sbloccato.</CardDescription>
+        {activeSection === "unlockedBooks" ? (
+          <Card>
+            <CardTitle>Libri sbloccati dagli utenti</CardTitle>
+            <CardDescription>Per ogni libro vedi quante persone lo hanno sbloccato.</CardDescription>
 
-          <div className="mt-4 space-y-3">
-            {unlockedBooks.map((row) => (
-              <div key={row.id} className="rounded-2xl border border-zinc-200 p-3 text-sm">
-                <p className="font-semibold text-zinc-800">{row.title}</p>
-                <p className="text-xs text-zinc-500">{row.slug}</p>
-                <p className="mt-1 text-zinc-700">Sblocchi totali: {row.unlockedUsers}</p>
-                <p className={`mt-1 text-xs font-semibold ${row.isActive ? "text-emerald-700" : "text-zinc-500"}`}>
-                  {row.isActive ? "Visibile in dashboard utente" : "Sospeso in dashboard utente"}
-                </p>
-              </div>
-            ))}
-          </div>
-        </Card>
-      ) : null}
-
-      {activeSection === "activeUsers" ? (
-        <Card>
-          <CardTitle>Utenti attivi in questo momento</CardTitle>
-          <CardDescription>Considerati attivi se hanno effettuato accesso negli ultimi 10 minuti e non sono sospesi.</CardDescription>
-
-          <div className="mt-4 space-y-3">
-            {activeUsers.length === 0 ? <p className="text-sm text-zinc-500">Nessun utente attivo al momento.</p> : null}
-
-            {activeUsers.map((user) => (
-              <div key={user.id} className="flex items-start gap-3 rounded-2xl border border-zinc-200 p-3 text-sm">
-                <span className="mt-1 inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                <div>
-                  <p className="font-semibold text-zinc-800">
-                    {user.firstName} {user.lastName}
-                  </p>
-                  <p className="text-xs text-zinc-500">{user.email}</p>
-                  <p className="text-xs text-zinc-500">
-                    Ultimo accesso: {user.lastSignInAt ? new Date(user.lastSignInAt).toLocaleString("it-IT") : "n/d"}
+            <div className="mt-4 space-y-3">
+              {unlockedBooks.map((row) => (
+                <div key={row.id} className="rounded-2xl border border-zinc-200 p-3 text-sm">
+                  <p className="font-semibold text-zinc-800">{row.title}</p>
+                  <p className="text-xs text-zinc-500">{row.slug}</p>
+                  <p className="mt-1 text-zinc-700">Sblocchi totali: {row.unlockedUsers}</p>
+                  <p className={`mt-1 text-xs font-semibold ${row.isActive ? "text-emerald-700" : "text-zinc-500"}`}>
+                    {row.isActive ? "Visibile in dashboard utente" : "Sospeso in dashboard utente"}
                   </p>
                 </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      ) : null}
+              ))}
+            </div>
+          </Card>
+        ) : null}
 
-      {activeSection === "pendingTickets" ? <AdminSupportTicketsTable initialTickets={tickets} /> : null}
+        {activeSection === "activeUsers" ? (
+          <Card>
+            <CardTitle>Utenti attivi in questo momento</CardTitle>
+            <CardDescription>
+              Considerati attivi se hanno effettuato accesso negli ultimi 10 minuti e non sono sospesi.
+            </CardDescription>
 
-      {activeSection === "failedAttempts" ? (
-        <Card>
-          <CardTitle>Tentativi falliti challenge</CardTitle>
-          <CardDescription>
-            Questa sezione serve a monitorare errori ripetuti, possibili abusi e problemi di accesso ai libri.
-          </CardDescription>
+            <div className="mt-4 space-y-3">
+              {activeUsers.length === 0 ? <p className="text-sm text-zinc-500">Nessun utente attivo al momento.</p> : null}
 
-          <div className="mt-4 space-y-3">
-            {failedAttempts.length === 0 ? <p className="text-sm text-zinc-500">Nessun tentativo fallito registrato.</p> : null}
+              {activeUsers.map((user) => (
+                <div key={user.id} className="flex items-start gap-3 rounded-2xl border border-zinc-200 p-3 text-sm">
+                  <span className="mt-1 inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                  <div>
+                    <p className="font-semibold text-zinc-800">
+                      {user.firstName} {user.lastName}
+                    </p>
+                    <p className="text-xs text-zinc-500">{user.email}</p>
+                    <p className="text-xs text-zinc-500">
+                      Ultimo accesso: {user.lastSignInAt ? new Date(user.lastSignInAt).toLocaleString("it-IT") : "n/d"}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ) : null}
 
-            {failedAttempts.map((row) => (
-              <div key={row.id} className="rounded-2xl border border-zinc-200 p-3 text-sm">
-                <p className="font-semibold text-zinc-800">
-                  {row.userName} • {row.userEmail}
-                </p>
-                <p className="text-xs text-zinc-500">
-                  {row.bookTitle}
-                  {row.pageNumber ? ` • pagina ${row.pageNumber}` : ""} • {new Date(row.createdAt).toLocaleString("it-IT")}
-                </p>
-                <p className="mt-1 text-zinc-700">Input: {row.attemptInput ?? "(vuoto)"}</p>
-                <p className="text-xs text-zinc-500">Motivo: {row.reason}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
-      ) : null}
+        {activeSection === "pendingTickets" ? <AdminSupportTicketsTable initialTickets={tickets} /> : null}
+
+        {activeSection === "failedAttempts" ? (
+          <Card>
+            <CardTitle>Tentativi falliti challenge</CardTitle>
+            <CardDescription>
+              Questa sezione serve a monitorare errori ripetuti, possibili abusi e problemi di accesso ai libri.
+            </CardDescription>
+
+            <div className="mt-4 space-y-3">
+              {failedAttempts.length === 0 ? <p className="text-sm text-zinc-500">Nessun tentativo fallito registrato.</p> : null}
+
+              {failedAttempts.map((row) => (
+                <div key={row.id} className="rounded-2xl border border-zinc-200 p-3 text-sm">
+                  <p className="font-semibold text-zinc-800">
+                    {row.userName} • {row.userEmail}
+                  </p>
+                  <p className="text-xs text-zinc-500">
+                    {row.bookTitle}
+                    {row.pageNumber ? ` • pagina ${row.pageNumber}` : ""} • {new Date(row.createdAt).toLocaleString("it-IT")}
+                  </p>
+                  <p className="mt-1 text-zinc-700">Input: {row.attemptInput ?? "(vuoto)"}</p>
+                  <p className="text-xs text-zinc-500">Motivo: {row.reason}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ) : null}
+      </div>
     </div>
   );
 }
-

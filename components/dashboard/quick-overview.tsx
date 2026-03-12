@@ -40,6 +40,18 @@ export function QuickOverview({ userName, unlockedCount, bonusCount, hasChildPro
           >
             Sblocca un altro libro
           </Link>
+          <Link
+            href="/dashboard/supporto"
+            className="rounded-2xl bg-white px-4 py-2.5 text-sm font-semibold text-rose-800 shadow-sm ring-1 ring-rose-200 transition hover:bg-rose-50"
+          >
+            Chiedi Supporto
+          </Link>
+          <Link
+            href="/dashboard/impostazioni"
+            className="rounded-2xl bg-zinc-100 px-4 py-2.5 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-200"
+          >
+            Impostazioni
+          </Link>
         </div>
       </Card>
 

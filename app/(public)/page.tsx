@@ -116,7 +116,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="bg-white px-4 py-20 sm:px-6 lg:px-8">
+      <section className="bg-white px-4 pt-8 pb-20 sm:px-6 lg:px-8 lg:pt-10">
         <div className="mx-auto w-full max-w-7xl">
           <h2 className="font-heading text-4xl text-rose-900">Domande frequenti</h2>
           <div className="mt-7 grid gap-5 lg:grid-cols-3">

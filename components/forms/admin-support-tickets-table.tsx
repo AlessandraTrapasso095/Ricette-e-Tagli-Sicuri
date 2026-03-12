@@ -207,9 +207,68 @@ export function AdminSupportTicketsTable({ initialTickets }: AdminSupportTickets
         throw new Error(json.error ?? "Invio risposta non riuscito.");
       }
 
-      setTickets((prev) => prev.map((row) => (row.id === ticket.id ? { ...row, status: "chiuso" } : row)));
+      setTickets((prev) =>
+        prev.map((row) =>
+          row.id === ticket.id
+            ? {
+                ...row,
+                status: "chiuso",
+                admin_notes: json.data?.admin_notes ?? row.admin_notes,
+              }
+            : row,
+        ),
+      );
+      setStatusSelectionByTicket((prev) => ({ ...prev, [ticket.id]: "chiuso" }));
       setReplyByTicket((prev) => ({ ...prev, [ticket.id]: "" }));
       setStatusMessage("Risposta inviata via email e ticket chiuso.");
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Invio risposta non riuscito.");
+    } finally {
+      setUpdatingTicketId(null);
+    }
+  }
+
+  async function replyOnly(ticket: AdminSupportTicketRow) {
+    const reply = (replyByTicket[ticket.id] ?? "").trim();
+    if (!reply) {
+      setStatusMessage("Scrivi una risposta prima di inviare.");
+      return;
+    }
+
+    setUpdatingTicketId(ticket.id);
+    setStatusMessage(null);
+
+    try {
+      const response = await fetch("/api/admin/support", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticketId: ticket.id,
+          status: "in_lavorazione",
+          replyMessage: reply,
+          notifyUser: true,
+        }),
+      });
+      const json = await response.json();
+
+      if (!response.ok) {
+        throw new Error(json.error ?? "Invio risposta non riuscito.");
+      }
+
+      setTickets((prev) =>
+        prev.map((row) =>
+          row.id === ticket.id
+            ? {
+                ...row,
+                status: "in_lavorazione",
+                admin_notes: json.data?.admin_notes ?? row.admin_notes,
+              }
+            : row,
+        ),
+      );
+      setStatusSelectionByTicket((prev) => ({ ...prev, [ticket.id]: "in_lavorazione" }));
+      setReplyByTicket((prev) => ({ ...prev, [ticket.id]: "" }));
+      setStatusMessage("Risposta inviata. Ticket lasciato in lavorazione.");
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Invio risposta non riuscito.");
     } finally {
@@ -323,6 +382,15 @@ export function AdminSupportTicketsTable({ initialTickets }: AdminSupportTickets
                   onClick={() => updateTicketStatus(ticket)}
                 >
                   {updatingTicketId === ticket.id ? "Aggiorno..." : "Aggiorna stato"}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={updatingTicketId === ticket.id}
+                  onClick={() => replyOnly(ticket)}
+                >
+                  {updatingTicketId === ticket.id ? "Invio..." : "Invia risposta"}
                 </Button>
 
                 <Button

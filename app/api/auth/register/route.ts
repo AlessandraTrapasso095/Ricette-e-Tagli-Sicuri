@@ -192,6 +192,7 @@ export async function POST(request: Request) {
           .from("profiles")
           .update({
             full_name: parsed.data.fullName,
+            display_name: parsed.data.fullName,
           })
           .eq("id", fallbackResult.userId);
       }
@@ -230,6 +231,7 @@ export async function POST(request: Request) {
         .from("profiles")
         .update({
           full_name: parsed.data.fullName,
+          display_name: parsed.data.fullName,
         })
         .eq("id", data.user.id);
     }
