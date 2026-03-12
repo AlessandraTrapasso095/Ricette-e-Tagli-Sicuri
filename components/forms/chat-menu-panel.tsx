@@ -204,7 +204,7 @@ export function ChatMenuPanel() {
         <CardTitle>Cosa mangiamo oggi?</CardTitle>
         <CardDescription>
           Qui puoi generare il tuo menu giornaliero, trovi tutte le info in{" "}
-          <span className="font-semibold">"Istruzioni Utilizzo"</span>. Puoi fare fino a{" "}
+          <span className="font-semibold">&quot;Istruzioni Utilizzo&quot;</span>. Puoi fare fino a{" "}
           <span className="underline decoration-2 underline-offset-2">cinque modifiche giornaliere</span>. Buon Svezzamento! ❤️👦🏼
         </CardDescription>
 

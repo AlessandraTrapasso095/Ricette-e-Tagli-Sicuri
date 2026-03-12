@@ -732,7 +732,7 @@ export async function setAdminUserSuspension(params: {
   const durationValue = params.duration === "permanent" ? "876000h" : params.duration;
   const banDuration = params.duration === "none" ? "none" : durationValue;
 
-  const { error } = await admin.auth.admin.updateUserById(params.userId, {
+  const { data, error } = await admin.auth.admin.updateUserById(params.userId, {
     ban_duration: banDuration,
   });
 
@@ -749,6 +749,22 @@ export async function setAdminUserSuspension(params: {
       duration: params.duration,
     },
   });
+
+  const hoursByDuration: Record<Exclude<typeof params.duration, "none">, number> = {
+    "1h": 1,
+    "24h": 24,
+    "168h": 168,
+    permanent: 876000,
+  };
+
+  const fallbackBannedUntil =
+    params.duration === "none" ? null : new Date(Date.now() + hoursByDuration[params.duration] * 60 * 60 * 1000).toISOString();
+  const fromAuth = parseFutureDate(data.user?.banned_until)?.toISOString() ?? null;
+
+  return {
+    isSuspended: params.duration !== "none",
+    bannedUntil: params.duration === "none" ? null : fromAuth ?? fallbackBannedUntil,
+  };
 }
 
 export async function getAdminUnlockedBooksSummary() {

@@ -61,6 +61,14 @@ export function AdminBonusManager({ books, initialBonus }: AdminBonusManagerProp
   const [deleteLoadingId, setDeleteLoadingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  function startCreateBonus() {
+    setForm(buildDefaultState(books[0]?.id));
+    setStatusMessage("Compila i campi per creare un nuovo bonus.");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }
+
   async function refreshRows() {
     const response = await fetch("/api/admin/bonus");
     const json = await response.json();
@@ -199,7 +207,7 @@ export function AdminBonusManager({ books, initialBonus }: AdminBonusManagerProp
   return (
     <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
       <Card>
-        <CardTitle>{form.id ? "Modifica bonus PDF" : "+ Nuovo bonus PDF"}</CardTitle>
+        <CardTitle>{form.id ? "Modifica bonus PDF" : "Gestione bonus PDF"}</CardTitle>
         <CardDescription>Carica PDF, modifica titolo e collega il bonus al libro corretto.</CardDescription>
 
         <form className="mt-4 grid gap-3" onSubmit={handleSubmit}>
@@ -256,11 +264,7 @@ export function AdminBonusManager({ books, initialBonus }: AdminBonusManagerProp
                 type="button"
                 variant="ghost"
                 onClick={() => {
-                  setForm(buildDefaultState(books[0]?.id));
-                  setStatusMessage(null);
-                  if (fileInputRef.current) {
-                    fileInputRef.current.value = "";
-                  }
+                  startCreateBonus();
                 }}
               >
                 Annulla modifica
@@ -271,8 +275,15 @@ export function AdminBonusManager({ books, initialBonus }: AdminBonusManagerProp
       </Card>
 
       <Card>
-        <CardTitle>Bonus configurati</CardTitle>
-        <CardDescription>Elenco bonus con stato attivo/disattivo e possibilità di modifica.</CardDescription>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Button type="button" variant="secondary" onClick={startCreateBonus}>
+            + Nuovo bonus PDF
+          </Button>
+          <div>
+            <CardTitle>Bonus configurati</CardTitle>
+            <CardDescription>Elenco bonus con stato attivo/disattivo e possibilità di modifica.</CardDescription>
+          </div>
+        </div>
 
         <div className="mt-4 space-y-3">
           {bonusRows.length === 0 ? (

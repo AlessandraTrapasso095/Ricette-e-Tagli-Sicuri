@@ -32,8 +32,60 @@ interface AdminBooksManagerProps {
 export function AdminBooksManager({ initialBooks, initialRecommendedBooks }: AdminBooksManagerProps) {
   const [books, setBooks] = useState(initialBooks);
   const [recommendedBooks, setRecommendedBooks] = useState(initialRecommendedBooks);
+  const [showCreateBookForm, setShowCreateBookForm] = useState(false);
+  const [createBookForm, setCreateBookForm] = useState({
+    title: "",
+    subtitle: "",
+    link: "",
+  });
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
+
+  async function createBook() {
+    if (!createBookForm.title.trim()) {
+      setStatusMessage("Inserisci almeno il titolo del libro.");
+      return;
+    }
+
+    setStatusMessage(null);
+    setLoading("create-book");
+
+    try {
+      const response = await fetch("/api/admin/books", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: createBookForm.title.trim(),
+          subtitle: createBookForm.subtitle.trim(),
+          link: createBookForm.link.trim(),
+        }),
+      });
+      const json = await response.json();
+      if (!response.ok) {
+        throw new Error(json.error ?? "Creazione libro non riuscita.");
+      }
+
+      const created = json.data as { id: string; slug: string; title: string };
+      setBooks((prev) => [
+        ...prev,
+        {
+          id: created.id,
+          slug: created.slug,
+          title: created.title,
+          description: createBookForm.subtitle.trim() || null,
+          cover_url: createBookForm.link.trim() || null,
+          is_active: true,
+        },
+      ]);
+      setCreateBookForm({ title: "", subtitle: "", link: "" });
+      setShowCreateBookForm(false);
+      setStatusMessage("Libro creato.");
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Creazione libro non riuscita.");
+    } finally {
+      setLoading(null);
+    }
+  }
 
   async function saveBook(book: BookRow) {
     setStatusMessage(null);
@@ -169,6 +221,9 @@ export function AdminBooksManager({ initialBooks, initialRecommendedBooks }: Adm
     <div className="space-y-6">
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
+          <Button type="button" variant="secondary" onClick={() => setShowCreateBookForm((prev) => !prev)}>
+            {showCreateBookForm ? "Chiudi" : "+ Nuovo libro"}
+          </Button>
           <div>
             <CardTitle>Libri area privata</CardTitle>
             <CardDescription>Modifica titolo/link, sospendi la visibilità in dashboard o elimina il libro.</CardDescription>
@@ -176,6 +231,44 @@ export function AdminBooksManager({ initialBooks, initialRecommendedBooks }: Adm
         </div>
 
         {statusMessage ? <p className="mt-3 text-sm text-zinc-700">{statusMessage}</p> : null}
+
+        {showCreateBookForm ? (
+          <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-3">
+            <p className="text-sm font-semibold text-rose-900">Aggiungi libro</p>
+            <div className="mt-2 grid gap-2">
+              <Input
+                value={createBookForm.title}
+                onChange={(event) => setCreateBookForm((prev) => ({ ...prev, title: event.target.value }))}
+                placeholder="Titolo"
+              />
+              <Textarea
+                value={createBookForm.subtitle}
+                onChange={(event) => setCreateBookForm((prev) => ({ ...prev, subtitle: event.target.value }))}
+                placeholder="Sottotitolo"
+              />
+              <Input
+                value={createBookForm.link}
+                onChange={(event) => setCreateBookForm((prev) => ({ ...prev, link: event.target.value }))}
+                placeholder="Link"
+              />
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button type="button" disabled={loading === "create-book"} onClick={createBook}>
+                {loading === "create-book" ? "Creo..." : "Salva nuovo libro"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setShowCreateBookForm(false);
+                  setCreateBookForm({ title: "", subtitle: "", link: "" });
+                }}
+              >
+                Annulla
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-4 space-y-3">
           {books.map((book) => (

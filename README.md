@@ -78,7 +78,10 @@ La migration `supabase/migrations/0001_init.sql` crea:
 ### 1) Auth
 
 - Registrazione email+password
+- Invio email conferma account (brandizzata) via API `POST /api/auth/register` quando è configurato almeno un provider applicativo (`RESEND_API_KEY` oppure SMTP)
+- Fallback automatico a email standard Supabase se non è configurato nessun provider applicativo
 - Verifica email via callback `/auth/callback`
+- Email di benvenuto automatica al primo click di conferma (`event=signup-confirmed`, invio una sola volta per utente)
 - Login
 - Reset password
 - Logout
@@ -213,6 +216,15 @@ npm run lint
 npm run typecheck
 npm test
 ```
+
+## Note email registrazione
+
+- Mittente predefinito applicazione: `ricettetaglisicuri@gmail.com` (override opzionale con `RESEND_FROM_EMAIL`).
+- Per aprire correttamente i link di conferma da telefono, imposta `AUTH_REDIRECT_BASE_URL` al dominio pubblico (es. `https://ricette-tagli-sicuri.it`).
+- Per usare conferma account brandizzata e mail di benvenuto è necessario configurare almeno un provider:
+  - `RESEND_API_KEY`
+  - oppure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`
+- migration `supabase/migrations/0007_user_email_events.sql` applicata.
 
 ## Deploy
 

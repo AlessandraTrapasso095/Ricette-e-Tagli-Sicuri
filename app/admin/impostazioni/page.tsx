@@ -1,4 +1,3 @@
-import { AdminBroadcastForm } from "@/components/forms/admin-broadcast-form";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -8,14 +7,6 @@ export default async function AdminImpostazioniPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardTitle>Comunicazioni email</CardTitle>
-        <CardDescription>
-          Invia avvisi e novità a tutti gli utenti registrati (sconti, nuove uscite, aggiornamenti importanti).
-        </CardDescription>
-        <AdminBroadcastForm />
-      </Card>
-
       <Card>
         <CardTitle>Impostazioni tecniche</CardTitle>
         <CardDescription>Configurazioni centralizzate dell&apos;app.</CardDescription>

@@ -33,8 +33,6 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const pathname = request.nextUrl.pathname;
-
   if (user) {
     const now = Date.now();
     const lastActivityRaw = request.cookies.get(INACTIVITY_COOKIE_NAME)?.value;

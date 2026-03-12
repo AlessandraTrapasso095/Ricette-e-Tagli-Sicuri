@@ -37,11 +37,11 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Input non valido" }, { status: 400 });
   }
 
-  await setAdminUserSuspension({
+  const result = await setAdminUserSuspension({
     adminUserId: user.id,
     userId: parsed.data.userId,
     duration: parsed.data.duration,
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ data: result });
 }

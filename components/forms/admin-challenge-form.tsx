@@ -21,6 +21,7 @@ interface AdminChallengeFormProps {
 export function AdminChallengeForm({ books, onSaved }: AdminChallengeFormProps) {
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const form = useForm<AdminChallengeValues>({
     resolver: zodResolver(adminChallengeSchema),
@@ -66,32 +67,41 @@ export function AdminChallengeForm({ books, onSaved }: AdminChallengeFormProps) 
 
   return (
     <Card>
-      <CardTitle>+ Nuova challenge</CardTitle>
-      <CardDescription>Aggiungi challenge senza toccare il codice.</CardDescription>
-
-      <form className="mt-4 grid gap-3" onSubmit={form.handleSubmit(onSubmit)}>
-        <Select {...form.register("bookId")}>
-          {books.map((book) => (
-            <option key={book.id} value={book.id}>
-              {book.title}
-            </option>
-          ))}
-        </Select>
-        <Input type="number" min={1} placeholder="Numero pagina" {...form.register("pageNumber", { valueAsNumber: true })} />
-        <Input placeholder="Testo challenge" {...form.register("promptText")} />
-        <Input placeholder="Risposta accettata" {...form.register("acceptedAnswer")} />
-
-        <label className="flex items-center gap-2 text-sm text-zinc-700">
-          <input type="checkbox" className="rounded" {...form.register("isActive")} />
-          Challenge attiva
-        </label>
-
-        {status ? <p className="text-sm text-zinc-700">{status}</p> : null}
-
-        <Button type="submit" disabled={loading}>
-          {loading ? "Salvataggio..." : "Salva challenge"}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Button type="button" variant="secondary" onClick={() => setOpen((prev) => !prev)}>
+          {open ? "Chiudi" : "+ Nuova challenge"}
         </Button>
-      </form>
+        <div>
+          <CardTitle>Challenge di sblocco</CardTitle>
+          <CardDescription>Aggiungi challenge senza toccare il codice.</CardDescription>
+        </div>
+      </div>
+
+      {open ? (
+        <form className="mt-4 grid gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-3" onSubmit={form.handleSubmit(onSubmit)}>
+          <Select {...form.register("bookId")}>
+            {books.map((book) => (
+              <option key={book.id} value={book.id}>
+                {book.title}
+              </option>
+            ))}
+          </Select>
+          <Input type="number" min={1} placeholder="Numero pagina" {...form.register("pageNumber", { valueAsNumber: true })} />
+          <Input placeholder="Testo challenge" {...form.register("promptText")} />
+          <Input placeholder="Risposta accettata" {...form.register("acceptedAnswer")} />
+
+          <label className="flex items-center gap-2 text-sm text-zinc-700">
+            <input type="checkbox" className="rounded" {...form.register("isActive")} />
+            Challenge attiva
+          </label>
+
+          {status ? <p className="text-sm text-zinc-700">{status}</p> : null}
+
+          <Button type="submit" disabled={loading}>
+            {loading ? "Salvataggio..." : "Salva challenge"}
+          </Button>
+        </form>
+      ) : null}
     </Card>
   );
 }

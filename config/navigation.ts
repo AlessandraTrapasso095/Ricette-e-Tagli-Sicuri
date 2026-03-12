@@ -23,5 +23,6 @@ export const adminNavigation = [
   { href: "/admin/utenti", label: "Utenti" },
   { href: "/admin/challenge", label: "Challenge" },
   { href: "/admin/ticket", label: "Ticket" },
+  { href: "/admin/comunicazione-utenti", label: "Comunicazione Utenti" },
   { href: "/admin/impostazioni", label: "Impostazioni" },
 ];

@@ -60,6 +60,7 @@ function addUnlockedBook(
 }
 
 const SUSPENSION_OPTIONS = [
+  { value: "unchanged", label: "Nessuna modifica" },
   { value: "none", label: "Rimuovi sospensione" },
   { value: "1h", label: "Sospendi 1 ora" },
   { value: "24h", label: "Sospendi 24 ore" },
@@ -159,7 +160,11 @@ export function AdminUsersTable({ users, books }: AdminUsersTableProps) {
   }
 
   async function updateSuspension(user: UserRow) {
-    const value = suspensionByUser[user.id] ?? "none";
+    const value = suspensionByUser[user.id] ?? "unchanged";
+    if (value === "unchanged") {
+      setStatusMessage("Seleziona un'azione account prima di aggiornare.");
+      return;
+    }
     setStatusMessage(null);
     setLoadingUserId(user.id);
 
@@ -182,8 +187,8 @@ export function AdminUsersTable({ users, books }: AdminUsersTableProps) {
           row.id === user.id
             ? {
                 ...row,
-                isSuspended: value !== "none",
-                bannedUntil: value === "none" ? null : row.bannedUntil,
+                isSuspended: Boolean(json.data?.isSuspended),
+                bannedUntil: json.data?.bannedUntil ?? null,
               }
             : row,
         ),
@@ -294,7 +299,7 @@ export function AdminUsersTable({ users, books }: AdminUsersTableProps) {
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Select
-                  value={suspensionByUser[user.id] ?? "none"}
+                  value={suspensionByUser[user.id] ?? "unchanged"}
                   onChange={(event) =>
                     setSuspensionByUser((prev) => ({
                       ...prev,
