@@ -86,8 +86,14 @@ async function sendWithSmtp(params: SendTransactionalEmailParams) {
 
 export async function sendTransactionalEmail(params: SendTransactionalEmailParams) {
   if (hasResendTransport()) {
-    await sendWithResend(params);
-    return;
+    try {
+      await sendWithResend(params);
+      return;
+    } catch (error) {
+      if (!hasSmtpTransport()) {
+        throw error;
+      }
+    }
   }
 
   if (hasSmtpTransport()) {
@@ -97,4 +103,3 @@ export async function sendTransactionalEmail(params: SendTransactionalEmailParam
 
   throw new Error("Nessun provider email configurato (RESEND o SMTP).");
 }
-

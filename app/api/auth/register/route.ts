@@ -52,6 +52,57 @@ function extractActionLinkFromGenerateLinkResponse(data: unknown) {
   return typeof candidate.properties?.action_link === "string" ? candidate.properties.action_link : null;
 }
 
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+async function isEmailAlreadyRegistered(email: string) {
+  const admin = createSupabaseAdminClient();
+  const normalizedEmail = normalizeEmail(email);
+  const { data: profileData, error: profileError } = await admin
+    .from("profiles")
+    .select("id, email")
+    .ilike("email", normalizedEmail)
+    .maybeSingle();
+
+  if (profileError) {
+    throw profileError;
+  }
+
+  if (profileData?.id) {
+    return true;
+  }
+
+  // Fallback robusto: alcuni account possono esistere in auth.users ma non essere ancora sincronizzati in profiles.
+  let page = 1;
+  const perPage = 200;
+  const maxPages = 20;
+
+  while (page <= maxPages) {
+    const { data: usersData, error: usersError } = await admin.auth.admin.listUsers({
+      page,
+      perPage,
+    });
+
+    if (usersError) {
+      throw usersError;
+    }
+
+    const users = usersData?.users ?? [];
+    if (users.some((user) => normalizeEmail(user.email ?? "") === normalizedEmail)) {
+      return true;
+    }
+
+    if (users.length < perPage) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return false;
+}
+
 async function fallbackSignupWithSupabaseDefaultEmail(params: {
   email: string;
   password: string;
@@ -116,6 +167,13 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: parsed.error.issues[0]?.message ?? "Input non valido.", code: "REGISTRATION_FAILED" as RegisterErrorCode },
         { status: 400 },
+      );
+    }
+
+    if (await isEmailAlreadyRegistered(parsed.data.email)) {
+      return NextResponse.json(
+        { error: "Utente già iscritto, hai dimenticato la password?", code: "EMAIL_ALREADY_REGISTERED" as RegisterErrorCode },
+        { status: 409 },
       );
     }
 

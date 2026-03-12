@@ -23,35 +23,45 @@ export async function GET(request: Request) {
   const requestedNext = sanitizeNextPath(requestUrl.searchParams.get("next"));
   const event = requestUrl.searchParams.get("event");
   const supabase = await createSupabaseServerClient();
+  let exchangeUser: {
+    id: string;
+    email?: string | null;
+    user_metadata?: Record<string, unknown>;
+  } | null = null;
 
   if (code) {
-    await supabase.auth.exchangeCodeForSession(code);
+    const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+    if (!exchangeError) {
+      exchangeUser = exchangeData.user ?? exchangeData.session?.user ?? null;
+    }
   }
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const effectiveUser = user ?? exchangeUser;
 
-  if (user && event === "signup-confirmed" && user.email) {
+  if (effectiveUser && event === "signup-confirmed" && effectiveUser.email) {
     const baseUrl = resolveAppBaseUrl(request);
     const dashboardUrl = `${baseUrl}/dashboard`;
-    const fullName = typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : null;
+    const fullName =
+      typeof effectiveUser.user_metadata?.full_name === "string" ? effectiveUser.user_metadata.full_name : null;
 
     try {
       await sendWelcomeEmailOnce({
-        userId: user.id,
-        email: user.email,
+        userId: effectiveUser.id,
+        email: effectiveUser.email,
         fullName,
         dashboardUrl,
       });
     } catch (error) {
-      console.error("Welcome email non inviata", { userId: user.id, error });
+      console.error("Welcome email non inviata", { userId: effectiveUser.id, error });
     }
   }
 
-  const fallbackPath = user ? await getPostLoginPath(user.id, user.email) : "/dashboard";
+  const fallbackPath = effectiveUser ? await getPostLoginPath(effectiveUser.id, effectiveUser.email) : "/dashboard";
   const next =
-    user && requestedNext === "/dashboard" && fallbackPath === "/admin"
+    effectiveUser && requestedNext === "/dashboard" && fallbackPath === "/admin"
       ? "/admin"
       : requestedNext ?? fallbackPath;
 
