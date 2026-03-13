@@ -1,11 +1,8 @@
 import "server-only";
 
-import { Resend } from "resend";
-
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getEnv } from "@/lib/env";
-
-const DEFAULT_PLATFORM_FROM_EMAIL = "ricettetaglisicuri@gmail.com";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { sendTransactionalEmail } from "@/server/email/transactional-sender";
 
 interface CreateSupportTicketInput {
   userId: string;
@@ -72,15 +69,6 @@ interface AdminSupportTicketFilters {
   q?: string;
 }
 
-function createResendClient() {
-  const apiKey = getEnv("RESEND_API_KEY");
-  if (!apiKey) {
-    return null;
-  }
-
-  return new Resend(apiKey);
-}
-
 async function getTicketBooksMap(bookIds: string[]) {
   const admin = createSupabaseAdminClient();
 
@@ -129,17 +117,14 @@ export async function createSupportTicket(input: CreateSupportTicketInput) {
     throw new Error("Non sono riuscito a creare il ticket di supporto.");
   }
 
-  const resend = createResendClient();
-  const from = getEnv("RESEND_FROM_EMAIL") ?? DEFAULT_PLATFORM_FROM_EMAIL;
   const supportTarget = getEnv("SUPPORT_TARGET_EMAIL") ?? "supporto@ricetteetaglisicuri.it";
+  const safeBookName = bookTitle ?? "Non specificato";
 
-  if (resend) {
-    const safeBookName = bookTitle ?? "Non specificato";
-
-    await resend.emails.send({
-      from,
+  try {
+    await sendTransactionalEmail({
       to: supportTarget,
       subject: `[Area Lettori] Nuovo ticket ${ticket.id}`,
+      replyTo: input.email,
       html: `
         <h2>Nuovo ticket supporto</h2>
         <p><strong>ID:</strong> ${ticket.id}</p>
@@ -151,8 +136,7 @@ export async function createSupportTicket(input: CreateSupportTicketInput) {
       `,
     });
 
-    await resend.emails.send({
-      from,
+    await sendTransactionalEmail({
       to: input.email,
       subject: "Abbiamo ricevuto la tua richiesta",
       html: `
@@ -161,6 +145,8 @@ export async function createSupportTicket(input: CreateSupportTicketInput) {
         <p>abbiamo ricevuto la tua richiesta di supporto (${ticket.id}). Ti risponderemo il prima possibile.</p>
       `,
     });
+  } catch (error) {
+    console.error("Errore invio email ticket supporto", { ticketId: ticket.id, error });
   }
 
   return {
@@ -291,14 +277,7 @@ export async function updateAdminSupportTicketStatus(params: {
   const booksById = await getTicketBooksMap(updated.book_id ? [updated.book_id] : []);
 
   if (params.notifyUser && params.replyMessage?.trim()) {
-    const resend = createResendClient();
-    if (!resend) {
-      throw new Error("Email non inviata: configura RESEND_API_KEY.");
-    }
-
-    const from = getEnv("RESEND_FROM_EMAIL") ?? DEFAULT_PLATFORM_FROM_EMAIL;
-    await resend.emails.send({
-      from,
+    await sendTransactionalEmail({
       to: updated.email,
       subject: "Risposta al tuo ticket - Ricette e Tagli Sicuri",
       html: `

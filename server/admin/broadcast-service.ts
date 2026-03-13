@@ -1,20 +1,19 @@
 import "server-only";
 
-import { Resend } from "resend";
-
-import { getEnv } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { sendTransactionalEmail } from "@/server/email/transactional-sender";
 
-const DEFAULT_BROADCAST_FROM = "ricettetaglisicuri@gmail.com";
+function escapeHtml(text: string) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 export async function sendBroadcastEmail(params: { subject: string; message: string; adminUserId: string }) {
-  const resendApiKey = getEnv("RESEND_API_KEY");
-  if (!resendApiKey) {
-    throw new Error("Configura RESEND_API_KEY per inviare email agli utenti.");
-  }
-
   const admin = createSupabaseAdminClient();
-  const resend = new Resend(resendApiKey);
 
   const { data: profiles, error } = await admin.from("profiles").select("id, email").neq("email", "");
   if (error) {
@@ -26,14 +25,13 @@ export async function sendBroadcastEmail(params: { subject: string; message: str
     return { recipients: 0 };
   }
 
-  const from = DEFAULT_BROADCAST_FROM;
+  const safeMessageHtml = escapeHtml(params.message).replace(/\n/g, "<br/>");
 
   for (const email of recipients) {
-    await resend.emails.send({
-      from,
+    await sendTransactionalEmail({
       to: email,
       subject: params.subject,
-      html: `<p style="white-space:pre-line">${params.message}</p>`,
+      html: `<p style="white-space:normal">${safeMessageHtml}</p>`,
     });
   }
 
