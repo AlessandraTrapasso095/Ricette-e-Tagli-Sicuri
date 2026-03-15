@@ -1,8 +1,9 @@
 import Link from "next/link";
+import { ArrowRight, ArrowDownToLine } from "lucide-react";
 
 import { DiscoverBooksCard } from "@/components/dashboard/discover-books-card";
 import { QuickOverview } from "@/components/dashboard/quick-overview";
-import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getAdminRecommendedBooks } from "@/server/admin/admin-service";
 import { getAvailableBonusFiles } from "@/server/bonus/bonus-service";
@@ -31,7 +32,7 @@ export default async function DashboardPage() {
     "Lettore";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <QuickOverview
         userName={userName}
         unlockedCount={unlockedBooks.length}
@@ -40,24 +41,39 @@ export default async function DashboardPage() {
         hasChatAccess={chatAccess.hasAccess}
       />
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardTitle>Bonus disponibili</CardTitle>
-          <CardDescription>Scarica i PDF dei libri già verificati.</CardDescription>
-          <div className="mt-4 space-y-2">
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="space-y-4 border-0 bg-transparent p-0 shadow-none sm:border sm:border-rose-100 sm:bg-white sm:p-6 sm:shadow-[0_10px_35px_rgba(236,72,153,0.08)]">
+          <div className="space-y-1">
+            <h3 className="font-heading text-2xl font-semibold text-rose-900">Bonus disponibili</h3>
+            <p className="text-sm text-zinc-600">Scarica i PDF dei libri già verificati.</p>
+          </div>
+
+          <div className="space-y-3">
             {availableBonus.length === 0 ? (
-              <p className="text-sm text-zinc-500">Sblocca almeno un libro per accedere ai bonus dedicati.</p>
+              <Card className="rounded-3xl p-5">
+                <p className="text-sm text-zinc-500">Sblocca almeno un libro per accedere ai bonus dedicati.</p>
+              </Card>
             ) : (
               availableBonus.slice(0, 4).map((bonus) => (
-                <div key={bonus.id} className="rounded-2xl bg-rose-50 px-3 py-2 text-sm text-zinc-700">
-                  <p className="font-semibold text-rose-900">{bonus.title}</p>
-                  <p className="text-xs">{bonus.book.title}</p>
-                </div>
+                <Link
+                  key={bonus.id}
+                  href="/dashboard/bonus"
+                  className="flex items-center justify-between rounded-3xl border border-rose-100 bg-rose-50/80 px-4 py-4 transition hover:bg-rose-100"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-rose-900">{bonus.title}</p>
+                    <p className="mt-1 text-xs text-zinc-500">{bonus.book.title}</p>
+                  </div>
+                  <span className="ml-4 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-rose-600 shadow-sm">
+                    <ArrowDownToLine className="h-4 w-4" />
+                  </span>
+                </Link>
               ))
             )}
           </div>
-          <Link href="/dashboard/bonus" className="mt-4 inline-block text-sm font-semibold text-rose-700 hover:text-rose-800">
-            Vai ai bonus
+
+          <Link href="/dashboard/bonus" className="inline-flex items-center gap-2 text-sm font-bold text-rose-600 hover:text-rose-700">
+            Vai ai bonus <ArrowRight className="h-4 w-4" />
           </Link>
         </Card>
 

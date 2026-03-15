@@ -41,7 +41,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   return (
     <DisclaimerGate initialAccepted={disclaimerStatus.accepted}>
-      <DashboardShell rightTop={<LogoutButton />}>{children}</DashboardShell>
+      <DashboardShell rightTop={<LogoutButton />}>
+        {children}
+      </DashboardShell>
     </DisclaimerGate>
   );
 }
