@@ -15,6 +15,14 @@ describe("input-normalizer", () => {
     expect(extractCustomExclusions("Non ho zucchine, oggi senza uovo")).toEqual(["zucchine", "uovo"]);
   });
 
+  it("ripulisce parentesi e varianti di no/senza", () => {
+    expect(extractCustomExclusions("No (pera), niente yogurt oggi, non abbiamo patate")).toEqual([
+      "pera",
+      "yogurt",
+      "patate",
+    ]);
+  });
+
   it("rileva preferenze giornaliere pratiche", () => {
     const context = buildUserPromptContext("Ho poco tempo e siamo fuori casa, usa quello che ho in frigo");
     expect(context.detectedPreferences.length).toBeGreaterThanOrEqual(2);

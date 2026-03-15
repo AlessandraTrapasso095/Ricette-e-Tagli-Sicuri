@@ -22,6 +22,11 @@ interface AdminSupportTicketRow {
   message: string;
   created_at: string;
   admin_notes: string | null;
+  messages: {
+    sender: "utente" | "admin";
+    content: string;
+    created_at: string;
+  }[];
   books: {
     slug: string;
     title: string;
@@ -212,8 +217,8 @@ export function AdminSupportTicketsTable({ initialTickets }: AdminSupportTickets
           row.id === ticket.id
             ? {
                 ...row,
-                status: "chiuso",
-                admin_notes: json.data?.admin_notes ?? row.admin_notes,
+                ...row,
+                ...json.data,
               }
             : row,
         ),
@@ -260,8 +265,8 @@ export function AdminSupportTicketsTable({ initialTickets }: AdminSupportTickets
           row.id === ticket.id
             ? {
                 ...row,
-                status: "in_lavorazione",
-                admin_notes: json.data?.admin_notes ?? row.admin_notes,
+                ...row,
+                ...json.data,
               }
             : row,
         ),
@@ -335,13 +340,22 @@ export function AdminSupportTicketsTable({ initialTickets }: AdminSupportTickets
                 {ticket.books?.title ?? "Nessun libro indicato"}
               </p>
 
-              <p className="mt-2 text-sm text-zinc-700">{ticket.message}</p>
-
-              {ticket.admin_notes ? (
-                <p className="mt-2 text-xs text-zinc-600">
-                  <span className="font-semibold">Note admin:</span> {ticket.admin_notes}
-                </p>
-              ) : null}
+              <div className="mt-3 space-y-2 rounded-2xl bg-zinc-50 p-3">
+                {ticket.messages.map((message, index) => (
+                  <div
+                    key={`${ticket.id}-${index}-${message.created_at}`}
+                    className={`max-w-[92%] rounded-2xl px-3 py-2 text-sm ${
+                      message.sender === "admin" ? "ml-auto bg-rose-100 text-rose-900" : "bg-white text-zinc-700"
+                    }`}
+                  >
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                      {message.sender === "admin" ? "Admin" : "Utente"}
+                    </p>
+                    <p className="mt-1 whitespace-pre-line">{message.content}</p>
+                    <p className="mt-2 text-[11px] text-zinc-500">{new Date(message.created_at).toLocaleString("it-IT")}</p>
+                  </div>
+                ))}
+              </div>
 
               <div className="mt-3">
                 <Textarea

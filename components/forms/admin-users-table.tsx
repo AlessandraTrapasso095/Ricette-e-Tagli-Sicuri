@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 
 interface UserRow {
@@ -76,13 +77,38 @@ const FEEDING_STYLE_LABELS: Record<NonNullable<UserRow["childFeedingStyle"]>, st
   misto: "Misto",
 };
 
+function normalizeSearchValue(value: string | null | undefined) {
+  return (value ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 export function AdminUsersTable({ users, books }: AdminUsersTableProps) {
   const [rows, setRows] = useState(users);
+  const [searchInput, setSearchInput] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [revokeSelectionByUser, setRevokeSelectionByUser] = useState<Record<string, string>>({});
   const [grantSelectionByUser, setGrantSelectionByUser] = useState<Record<string, string>>({});
   const [suspensionByUser, setSuspensionByUser] = useState<Record<string, SuspensionValue>>({});
   const [loadingUserId, setLoadingUserId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  const filteredRows = useMemo(() => {
+    const normalizedSearch = normalizeSearchValue(appliedSearch);
+    if (!normalizedSearch) {
+      return rows;
+    }
+
+    return rows.filter((user) => {
+      const searchableText = normalizeSearchValue(
+        [user.full_name, `${user.firstName} ${user.lastName}`, user.email].filter(Boolean).join(" "),
+      );
+
+      return searchableText.includes(normalizedSearch);
+    });
+  }, [appliedSearch, rows]);
 
   async function revokeAccess(userId: string) {
     const bookId = revokeSelectionByUser[userId];
@@ -201,6 +227,36 @@ export function AdminUsersTable({ users, books }: AdminUsersTableProps) {
     }
   }
 
+  async function resetMenuChat(user: UserRow) {
+    setStatusMessage(null);
+    setLoadingUserId(user.id);
+
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+        }),
+      });
+      const json = await response.json();
+      if (!response.ok) {
+        throw new Error(json.error ?? "Reset menu chat non riuscito");
+      }
+
+      const archivedSessionsCount = Number(json.data?.archivedSessionsCount ?? 0);
+      setStatusMessage(
+        archivedSessionsCount > 0
+          ? `Menu chat giornaliero resettato. Sessioni archiviate oggi: ${archivedSessionsCount}.`
+          : "Menu chat giornaliero resettato. Nessuna sessione attiva oggi da archiviare.",
+      );
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Reset menu chat non riuscito");
+    } finally {
+      setLoadingUserId(null);
+    }
+  }
+
   return (
     <Card>
       <CardTitle>Utenti registrati</CardTitle>
@@ -208,10 +264,48 @@ export function AdminUsersTable({ users, books }: AdminUsersTableProps) {
         Dati account, profilo bambino, stato accesso, sblocco libri manuale e sospensione account.
       </CardDescription>
 
+      <form
+        className="mt-4 flex flex-wrap items-center gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setAppliedSearch(searchInput.trim());
+        }}
+      >
+        <Input
+          value={searchInput}
+          onChange={(event) => setSearchInput(event.target.value)}
+          placeholder="Cerca per nome o email"
+          className="max-w-md"
+        />
+        <Button type="submit" variant="secondary">
+          Cerca
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => {
+            setSearchInput("");
+            setAppliedSearch("");
+          }}
+        >
+          Azzera ricerca
+        </Button>
+      </form>
+
+      <p className="mt-2 text-xs text-zinc-500">
+        {appliedSearch ? `${filteredRows.length} utenti trovati per "${appliedSearch}".` : `${rows.length} utenti registrati.`}
+      </p>
+
       {statusMessage ? <p className="mt-2 text-sm text-zinc-700">{statusMessage}</p> : null}
 
       <div className="mt-4 space-y-3">
-        {rows.map((user) => {
+        {filteredRows.length === 0 ? (
+          <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
+            Nessun utente trovato con questa ricerca.
+          </div>
+        ) : null}
+
+        {filteredRows.map((user) => {
           const activeBookIds = new Set(user.unlockedBookRows.map((book) => book.id));
           const grantableBooks = books.filter((book) => !activeBookIds.has(book.id));
 
@@ -316,6 +410,9 @@ export function AdminUsersTable({ users, books }: AdminUsersTableProps) {
                 </Select>
                 <Button variant="ghost" disabled={loadingUserId === user.id} onClick={() => updateSuspension(user)}>
                   {loadingUserId === user.id ? "Operazione..." : "Aggiorna account"}
+                </Button>
+                <Button variant="secondary" disabled={loadingUserId === user.id} onClick={() => resetMenuChat(user)}>
+                  {loadingUserId === user.id ? "Operazione..." : "Reset menu chat"}
                 </Button>
               </div>
             </div>

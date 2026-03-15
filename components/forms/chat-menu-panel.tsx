@@ -1,15 +1,16 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { ReaderAreaNavCard } from "@/components/dashboard/reader-area-nav-card";
+import { BalancedPlateGuide } from "@/components/dashboard/balanced-plate-guide";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Textarea } from "@/components/ui/textarea";
 import { MENU_SESSION_PANEL_VISIBLE_ITEMS } from "@/config/chat-session";
-import { dashboardNavigation } from "@/config/navigation";
-import { SideNav } from "@/components/layout/side-nav";
+import { DailyMenuDisplay } from "@/components/dashboard/daily-menu-display";
 import type { DailyMenu } from "@/types/domain";
 
 interface MenuSession {
@@ -34,6 +35,7 @@ interface GeneratedState {
 
 const DEFAULT_CHAT_PROMPT = "Cosa mangiamo oggi?";
 const MODIFY_CHAT_PLACEHOLDER = "Se non hai ingredienti o vuoi richiedere modifiche, scrivi qui";
+const SAFE_CUTS_DISCLAIMER = "Offrire sempre nei tagli sicuri adeguati all'età del vostro bimbo/a.";
 const CHAT_INSTRUCTION_GROUPS = [
   {
     title: "Generazione menu",
@@ -49,11 +51,11 @@ const CHAT_INSTRUCTION_GROUPS = [
   },
   {
     title: "Cambio pasto",
-    examples: ["Cambia la cena, proponimi altro", "Modifica il pranzo con una vellutata", "Rifai la colazione con alternative"],
+    examples: ["Cambia la cena e proponimi altro", "Trasforma il pranzo in una vellutata", "Rifai la colazione con un porridge"],
   },
   {
     title: "Esclusioni e vincoli",
-    examples: ["Non ho zucchine", "Senza uovo", "No latticini oggi"],
+    examples: ["Non ho zucchine", "Senza uovo", "No latticini"],
   },
 ] as const;
 
@@ -61,17 +63,22 @@ export function ChatMenuPanel() {
   const [sessions, setSessions] = useState<MenuSession[]>([]);
   const [messages, setMessages] = useState<MenuMessage[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [loadedSessionId, setLoadedSessionId] = useState<string | null>(null);
   const [prompt, setPrompt] = useState(DEFAULT_CHAT_PROMPT);
   const [loading, setLoading] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [generated, setGenerated] = useState<GeneratedState | null>(null);
+  const lastMessagesRequestId = useRef(0);
 
   const loadSessions = useCallback(async () => {
-    const response = await fetch("/api/menu/sessions", { method: "GET" });
+    const response = await fetch("/api/menu/sessions", { method: "GET", credentials: "include" });
     const json = await response.json();
 
     if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error("Sessione scaduta. Accedi di nuovo per continuare.");
+      }
       throw new Error(json.error ?? "Impossibile caricare le sessioni.");
     }
 
@@ -80,6 +87,7 @@ export function ChatMenuPanel() {
     if (!json.data?.length) {
       setActiveSessionId(null);
       setMessages([]);
+      setLoadedSessionId(null);
       setGenerated(null);
       return;
     }
@@ -91,14 +99,26 @@ export function ChatMenuPanel() {
   }, [activeSessionId]);
 
   const loadMessages = useCallback(async (sessionId: string) => {
-    const response = await fetch(`/api/menu/sessions?sessionId=${sessionId}`, { method: "GET" });
+    const requestId = ++lastMessagesRequestId.current;
+    const response = await fetch(`/api/menu/sessions?sessionId=${sessionId}`, {
+      method: "GET",
+      credentials: "include",
+    });
     const json = await response.json();
 
     if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error("Sessione scaduta. Accedi di nuovo per continuare.");
+      }
       throw new Error(json.error ?? "Impossibile caricare i messaggi.");
     }
 
+    if (requestId !== lastMessagesRequestId.current) {
+      return;
+    }
+
     setMessages(json.data ?? []);
+    setLoadedSessionId(sessionId);
   }, []);
 
   useEffect(() => {
@@ -118,9 +138,29 @@ export function ChatMenuPanel() {
   }, [activeSessionId, loadMessages]);
 
   const latestMenu = useMemo(() => {
+    if (generated && generated.sessionId === activeSessionId) {
+      return generated.menu;
+    }
+
+    if (loadedSessionId !== activeSessionId) {
+      return null;
+    }
+
     const found = [...messages].reverse().find((message) => message.menu_payload);
-    return found?.menu_payload ?? generated?.menu ?? null;
-  }, [messages, generated]);
+    return found?.menu_payload ?? null;
+  }, [messages, generated, activeSessionId, loadedSessionId]);
+
+  const profileAlerts = useMemo(() => {
+    if (!latestMenu) {
+      return [];
+    }
+
+    return latestMenu.childProfileSummary.notes.filter(
+      (note) => note.startsWith("Allergie/intolleranze:") || note.startsWith("Alimenti da evitare:"),
+    );
+  }, [latestMenu]);
+  const showSafeCutsDisclaimer =
+    latestMenu?.childProfileSummary.weaningType === "autosvezzamento" || latestMenu?.childProfileSummary.weaningType === "misto";
 
   const hasGeneratedToday = sessions.length > 0 || generated !== null;
   const canSubmit = prompt.trim().length >= 2 && (!hasGeneratedToday || Boolean(activeSessionId));
@@ -151,16 +191,22 @@ export function ChatMenuPanel() {
 
       const response = await fetch("/api/chat-menu", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestPayload),
       });
 
       const json = await response.json();
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Sessione scaduta. Accedi di nuovo per continuare.");
+        }
         throw new Error(json.error ?? "Errore generazione menu");
       }
 
       const responseData = json.data;
+      setMessages([]);
+      setLoadedSessionId(null);
       setGenerated({
         sessionId: responseData.sessionId,
         messageId: responseData.assistantMessageId,
@@ -192,20 +238,16 @@ export function ChatMenuPanel() {
   }
 
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[210px_minmax(0,1fr)_240px]">
-      <Card>
-        <CardTitle>Area lettori</CardTitle>
-        <div className="mt-4">
-          <SideNav items={dashboardNavigation} />
-        </div>
-      </Card>
+    <div className="grid items-start gap-4 xl:grid-cols-[210px_minmax(0,1fr)_240px] xl:gap-6">
+      <ReaderAreaNavCard />
 
       <Card>
         <CardTitle>Cosa mangiamo oggi?</CardTitle>
         <CardDescription>
           Qui puoi generare il tuo menu giornaliero, trovi tutte le info in{" "}
-          <span className="font-semibold">&quot;Istruzioni Utilizzo&quot;</span>. Puoi fare fino a{" "}
-          <span className="underline decoration-2 underline-offset-2">cinque modifiche giornaliere</span>. Buon Svezzamento! ❤️👦🏼
+          <span className="font-semibold">&quot;Istruzioni Utilizzo&quot;</span>. La chat rispetta in modo tassativo
+          le esclusioni indicate nel messaggio e nel profilo bambino, comprese allergie e alimenti da evitare. Buon
+          Svezzamento! ❤️👦🏼
         </CardDescription>
 
         {showInstructions ? (
@@ -224,7 +266,7 @@ export function ChatMenuPanel() {
                         key={`${group.title}-${example}`}
                         type="button"
                         variant="secondary"
-                        className="px-3 py-1.5 text-xs font-medium"
+                        className="min-h-[42px] rounded-2xl border border-rose-200 bg-white px-3 py-2 text-left text-xs font-medium text-rose-900 shadow-sm hover:bg-rose-100"
                         onClick={() => {
                           setPrompt(example);
                           setShowInstructions(false);
@@ -244,17 +286,17 @@ export function ChatMenuPanel() {
           <Textarea
             value={prompt}
             placeholder={textareaPlaceholder}
-            className="min-h-[240px] resize-none"
+            className="min-h-[180px] resize-none sm:min-h-[220px]"
             onChange={(event) => setPrompt(event.target.value)}
           />
-          <div className="flex flex-wrap gap-3">
-            <Button type="submit" disabled={loading || !canSubmit}>
+          <div className="grid gap-3 sm:flex sm:flex-wrap">
+            <Button className="w-full sm:w-auto" type="submit" disabled={loading || !canSubmit}>
               {loading ? (hasGeneratedToday ? "Modifica in corso..." : "Generazione menu...") : hasGeneratedToday ? "Modifica menu" : "Genera menu"}
             </Button>
             <Button
               type="button"
               variant="secondary"
-              className="border border-rose-300 bg-rose-100 text-rose-900"
+              className="w-full border border-rose-300 bg-rose-100 text-rose-900 sm:w-auto"
               aria-expanded={showInstructions}
               onClick={() => setShowInstructions((current) => !current)}
             >
@@ -268,7 +310,7 @@ export function ChatMenuPanel() {
 
       <Card>
         <CardTitle>Sessioni Chat</CardTitle>
-        <div className="mt-4 space-y-2">
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
           {sessions.length === 0 ? (
             <p className="text-sm text-zinc-500">Nessuna sessione disponibile oggi.</p>
           ) : (
@@ -290,64 +332,40 @@ export function ChatMenuPanel() {
       </Card>
 
       {latestMenu ? (
-        <Card className="lg:col-span-3">
-          <CardTitle>Menu giornaliero</CardTitle>
-          <CardDescription>
-            {latestMenu.title} • Età:{" "}
-            {latestMenu.childProfileSummary.ageMonths !== null ? `${latestMenu.childProfileSummary.ageMonths} mesi` : "non specificata"} •
-            Svezzamento: {latestMenu.childProfileSummary.weaningType}
-          </CardDescription>
-
-          {latestMenu.childProfileSummary.notes.length > 0 ? (
-            <div className="mt-3 rounded-2xl bg-zinc-50 p-3 text-sm text-zinc-700">
-              <p className="font-medium text-zinc-800">Profilo e vincoli applicati</p>
-              <ul className="mt-1 list-inside list-disc space-y-1">
-                {latestMenu.childProfileSummary.notes.map((note) => (
-                  <li key={note}>{note}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            {latestMenu.meals.map((meal) => (
-              <div key={`${meal.mealType}-${meal.dishName}`} className="rounded-2xl border border-rose-100 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-rose-700">{meal.mealType}</p>
-                <h4 className="font-semibold text-zinc-800">{meal.dishName}</h4>
-                <p className="mt-2 text-sm text-zinc-700">
-                  <span className="font-medium">Ingredienti:</span> {meal.ingredients.join(", ")}
-                </p>
-                <p className="mt-1 text-sm text-zinc-700">
-                  <span className="font-medium">Preparazione:</span> {meal.preparation}
-                </p>
-                {meal.safetyNotes.length > 0 ? (
-                  <p className="mt-1 text-sm text-amber-700">
-                    <span className="font-medium">Sicurezza:</span> {meal.safetyNotes.join(" • ")}
-                  </p>
-                ) : null}
-                {meal.balancedPlate ? (
-                  <div className="mt-2 rounded-xl bg-emerald-50 p-2 text-xs text-emerald-800">
-                    <p className="font-semibold">Piatto bilanciato</p>
-                    <p>Carboidrati: {meal.balancedPlate.carbs}</p>
-                    <p>Proteine: {meal.balancedPlate.proteins}</p>
-                    <p>Verdure: {meal.balancedPlate.vegetables}</p>
-                    <p>Grassi buoni: {meal.balancedPlate.healthyFats}</p>
-                  </div>
-                ) : null}
+        <Card className="xl:col-span-2">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_272px] lg:items-start">
+            <div className="space-y-3">
+              <div>
+                <CardTitle>Menu giornaliero</CardTitle>
+                <CardDescription>
+                  {latestMenu.title} • Età:{" "}
+                  {latestMenu.childProfileSummary.ageMonths !== null ? `${latestMenu.childProfileSummary.ageMonths} mesi` : "non specificata"} •
+                  Svezzamento: {latestMenu.childProfileSummary.weaningType}
+                </CardDescription>
               </div>
-            ))}
-          </div>
-
-          {latestMenu.dailyNotes.length > 0 ? (
-            <div className="mt-4 rounded-2xl bg-rose-50 p-4 text-sm text-zinc-700">
-              <p className="font-semibold text-rose-800">Note del giorno</p>
-              <ul className="mt-2 list-inside list-disc space-y-1">
-                {latestMenu.dailyNotes.map((note) => (
-                  <li key={note}>{note}</li>
-                ))}
-              </ul>
+              {(profileAlerts.length > 0 || showSafeCutsDisclaimer) ? (
+                <div className="space-y-3">
+                  {profileAlerts.length > 0 ? (
+                    <div className="rounded-2xl border border-rose-100 bg-rose-50/70 px-4 py-3 text-sm text-rose-900">
+                      {profileAlerts.map((note) => (
+                        <p key={note}>{note}</p>
+                      ))}
+                    </div>
+                  ) : null}
+                  {showSafeCutsDisclaimer ? (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+                      {SAFE_CUTS_DISCLAIMER}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
-          ) : null}
+            <BalancedPlateGuide
+              ageMonths={latestMenu.childProfileSummary.ageMonths}
+              className="max-w-none lg:self-start"
+            />
+          </div>
+          <DailyMenuDisplay menu={latestMenu} className="mt-4" />
         </Card>
       ) : (
         <div className="lg:col-span-3">

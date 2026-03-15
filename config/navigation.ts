@@ -11,7 +11,6 @@ export const dashboardNavigation = [
   { href: "/dashboard/bonus", label: "Bonus PDF" },
   { href: "/dashboard/profilo-bambino", label: "Profilo bambino" },
   { href: "/dashboard/chat-menu", label: "Cosa mangiamo oggi?" },
-  { href: "/dashboard/menu-salvati", label: "Menu salvati" },
   { href: "/dashboard/supporto", label: "Supporto" },
   { href: "/dashboard/impostazioni", label: "Impostazioni" },
 ];

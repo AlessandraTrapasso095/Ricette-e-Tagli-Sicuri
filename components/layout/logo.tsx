@@ -6,19 +6,19 @@ export async function BrandLogo({ compact = false, href = "/" }: { compact?: boo
   const readerFacingName = await getReaderFacingName();
 
   return (
-    <Link href={href} className="inline-flex items-center gap-3">
+    <Link href={href} className="inline-flex max-w-full items-center gap-2 sm:gap-3">
       <Image
         src="/brand/logo-ricette-tagli-sicuri.png"
         alt="Logo Ricette e Tagli Sicuri"
         width={48}
         height={48}
-        className="h-12 w-12 rounded-full object-cover shadow-sm"
+        className="h-10 w-10 rounded-full object-cover shadow-sm sm:h-12 sm:w-12"
         priority
       />
       {!compact ? (
-        <span className="inline-flex flex-col leading-tight">
-          <span className="font-heading text-lg font-semibold tracking-tight text-rose-900">Ricette e Tagli Sicuri</span>
-          <span className="text-[10px] font-medium text-rose-700/80">di {readerFacingName}</span>
+        <span className="inline-flex min-w-0 flex-col leading-tight">
+          <span className="font-heading text-base font-semibold tracking-tight text-rose-900 sm:text-lg">Ricette e Tagli Sicuri</span>
+          <span className="text-[9px] font-medium text-rose-700/80 sm:text-[10px]">di {readerFacingName}</span>
         </span>
       ) : null}
     </Link>

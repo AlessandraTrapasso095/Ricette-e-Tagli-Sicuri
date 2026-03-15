@@ -55,6 +55,56 @@ export function getAgeStage(ageMonths: number | null): AgeStage {
   return "24_plus";
 }
 
+function matchesExclusionAlias(term: string, alias: string) {
+  const normalizedTerm = normalizeFreeText(term);
+  const normalizedAlias = normalizeFreeText(alias);
+
+  if (!normalizedTerm || !normalizedAlias) {
+    return false;
+  }
+
+  return normalizedTerm === normalizedAlias || normalizedTerm.includes(normalizedAlias) || normalizedAlias.includes(normalizedTerm);
+}
+
+const EXCLUSION_CATEGORY_ALIASES = {
+  carne: ["carne"],
+  legumi: ["legumi"],
+  verdure: ["verdure"],
+  cereali: ["cereali"],
+  frutta: ["frutta"],
+  latticini: ["latticini", "formaggi", "formaggi freschi"],
+  pesce: ["pesce"],
+  fruttaSecca: ["frutta secca", "frutta secca intera"],
+  glutine: ["glutine"],
+  uovo: ["uovo", "uova", "frittata"],
+} as const satisfies Record<keyof typeof businessRulesConfig.exclusionExpansionGroups, string[]>;
+
+export function expandForbiddenTerm(term: string) {
+  const normalizedTerm = normalizeFreeText(term);
+  const expanded = new Set<string>();
+
+  if (!normalizedTerm) {
+    return [];
+  }
+
+  expanded.add(normalizedTerm);
+
+  for (const [groupKey, aliases] of Object.entries(EXCLUSION_CATEGORY_ALIASES) as Array<
+    [keyof typeof EXCLUSION_CATEGORY_ALIASES, string[]]
+  >) {
+    if (aliases.some((alias) => matchesExclusionAlias(normalizedTerm, alias))) {
+      businessRulesConfig.exclusionExpansionGroups[groupKey].forEach((alias) => expanded.add(normalizeFreeText(alias)));
+      break;
+    }
+  }
+
+  return [...expanded];
+}
+
+export function expandForbiddenTerms(terms: string[]) {
+  return [...new Set(terms.flatMap((term) => expandForbiddenTerm(term)).filter(Boolean))];
+}
+
 export function buildMenuPolicyContext(child: ChildProfile | null, userPrompt: string): MenuPolicyContext {
   const promptContext = buildUserPromptContext(userPrompt);
   const feedingStyle: FeedingStyle = child?.feeding_style ?? "misto";
@@ -66,14 +116,12 @@ export function buildMenuPolicyContext(child: ChildProfile | null, userPrompt: s
   const customExclusions = promptContext.customExclusions.map(normalizeFreeText);
   const baseForbidden = businessRulesConfig.forbidden.always.map(normalizeFreeText);
 
-  const forbiddenTerms = [
+  const forbiddenTerms = expandForbiddenTerms([
     ...baseForbidden,
     ...allergies,
     ...foodsToAvoid,
     ...customExclusions,
-  ].filter(Boolean);
-
-  const uniqueForbiddenTerms = [...new Set(forbiddenTerms)];
+  ].filter(Boolean));
 
   const mainMealCompositionText =
     ageMonths !== null && ageMonths >= 24
@@ -85,7 +133,7 @@ export function buildMenuPolicyContext(child: ChildProfile | null, userPrompt: s
     ageMonths,
     ageStage,
     feedingStyle,
-    forbiddenTerms: uniqueForbiddenTerms,
+    forbiddenTerms,
     customExclusions,
     promptPreferences: promptContext.detectedPreferences,
     allergies,
@@ -170,13 +218,23 @@ export function buildMenuSystemPrompt(params: {
     `Adattamento età: ${stageGuidance}`,
     `Adattamento stile svezzamento (${params.policy.feedingStyle}): ${styleGuidance.join(" ")}`,
     `Regole tagli sicuri: ${businessRulesConfig.safeCutRules.join(" ")}`,
-    `Frequenza proteine settimanale da rispettare nel medio periodo: carne ${businessRulesConfig.proteinFrequencyWeekly.carne}, pesce ${businessRulesConfig.proteinFrequencyWeekly.pesce}, uova ${businessRulesConfig.proteinFrequencyWeekly.uova}, legumi ${businessRulesConfig.proteinFrequencyWeekly.legumi}, formaggi freschi ${businessRulesConfig.proteinFrequencyWeekly.formaggiFreschi}.`,
+    `Frequenza proteine settimanale da rispettare nel medio periodo: carne rossa ${businessRulesConfig.proteinFrequencyWeekly.carneRossa}, carne bianca ${businessRulesConfig.proteinFrequencyWeekly.carneBianca}, pesce ${businessRulesConfig.proteinFrequencyWeekly.pesce}, uova ${businessRulesConfig.proteinFrequencyWeekly.uova}, legumi ${businessRulesConfig.proteinFrequencyWeekly.legumi}, formaggi freschi ${businessRulesConfig.proteinFrequencyWeekly.formaggiFreschi}.`,
+    `Regola porzioni: ${businessRulesConfig.portionGuidance.text}`,
     params.proteinRotationHint ? `Rotazione proteine settimanale (storico): ${params.proteinRotationHint}` : "",
     `Esclusioni assolute: ${params.policy.forbiddenTerms.join(", ") || "nessuna"}.`,
+    "Le esclusioni del profilo bambino e del messaggio utente sono tassative: se il genitore scrive 'no latticini' devi escludere anche latte, yogurt, ricotta e formaggi; se segnala allergie o alimenti da evitare non puoi proporli in nessuna forma.",
+    "Le esclusioni non sono limitate agli esempi: ogni richiesta del tipo 'senza X', 'no X', 'niente X' o 'evita X' vale per qualsiasi alimento o categoria alimentare citata dal genitore.",
+    "Le quantità devono essere sempre per 1 solo bambino, mai per 2 persone, mai per tutta la famiglia e mai abbondanti.",
+    "Ogni ingrediente deve riportare un dosaggio o una misura concreta (es. 20 g, 2 cucchiai, 120 ml, 1/2 banana, q.b.).",
+    "La preparazione deve essere completa, chiara e pratica: almeno 2-3 passaggi reali, non frasi vaghe.",
+    "Nel classico usa solo consistenze cremose, frullate, passate o molto fluide: no polpette, no burger, no pancake, no pane, no torte, no finger food, no pezzi.",
+    "Nell'autosvezzamento puoi usare polpette, pancake, burger morbidi, pane, torte morbide e formati piu grandi, sempre nei tagli sicuri adeguati.",
+    "Nel misto devi mescolare davvero i due approcci: almeno una proposta classica cremosa e almeno una proposta da autosvezzamento morbida nei tagli sicuri.",
     "Se compare un alimento tondo, cilindrico o duro, specifica sempre il taglio/sicurezza corretto nelle safetyNotes.",
     "Devi proporre 4 pasti: colazione, pranzo, merenda, cena.",
-    "Ogni pasto deve includere piatto, ingredienti, preparazione breve, note pratiche, note sicurezza e sostituzioni. Per pranzo e cena compila anche balancedPlate.",
+    "Ogni pasto deve includere piatto, ingredienti con dosi, preparazione completa, note pratiche, note sicurezza e sostituzioni. Per pranzo e cena compila anche balancedPlate.",
     "Pranzo e cena devono essere completi e bilanciati; colazione e merenda più semplici ma nutrienti.",
+    "Non ripetere lo stesso alimento principale tra colazione e merenda, né tra pranzo e cena: varia il più possibile frutta, cereali, proteine e verdure nella stessa giornata.",
     "Privilegia ricette con pochi ingredienti, naturali e non industriali; varia cereali/proteine/verdure nella giornata.",
     "Ricorda sempre che il bambino decide quanto mangiare: no pressioni o forzature.",
     "Output obbligatorio JSON valido e strutturato: childProfileSummary deve essere oggetto con ageMonths, weaningType e notes.",

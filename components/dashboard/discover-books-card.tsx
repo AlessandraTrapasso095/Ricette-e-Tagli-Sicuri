@@ -48,7 +48,7 @@ export function DiscoverBooksCard({ books }: DiscoverBooksCardProps) {
         <Button
           type="button"
           variant="secondary"
-          className="mt-4"
+          className="mt-4 w-full sm:w-auto"
           onClick={() => setExpanded((current) => !current)}
         >
           {expanded ? "Riduci" : "Scoprili tutti"}

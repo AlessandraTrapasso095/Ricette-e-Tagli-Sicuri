@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -21,6 +22,7 @@ interface SupportTicketFormProps {
 }
 
 export function SupportTicketForm({ userEmail, userName, books }: SupportTicketFormProps) {
+  const router = useRouter();
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -53,6 +55,7 @@ export function SupportTicketForm({ userEmail, userName, books }: SupportTicketF
 
       setStatusMessage("Richiesta inviata con successo. Ti risponderemo presto.");
       form.setValue("message", "");
+      router.refresh();
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Errore invio ticket");
     } finally {
@@ -63,7 +66,15 @@ export function SupportTicketForm({ userEmail, userName, books }: SupportTicketF
   return (
     <Card>
       <CardTitle>Hai bisogno di supporto?</CardTitle>
-      <CardDescription>Invia una richiesta: riceverai conferma email e il ticket sarà tracciato in dashboard.</CardDescription>
+      <CardDescription>
+        Invia una richiesta tecnica relativa al sito: accesso, bonus PDF, chat menu, ticket o problemi di funzionamento.
+        Riceverai conferma email e il ticket sarà tracciato in dashboard.
+      </CardDescription>
+
+      <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        Il supporto e&apos; riservato a richieste tecniche sull&apos;Area Lettori. Per informazioni personali o richieste non legate
+        al funzionamento del sito, usa gli altri canali dedicati.
+      </div>
 
       <form className="mt-5 space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
         <div className="grid gap-4 sm:grid-cols-2">

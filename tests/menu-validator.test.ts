@@ -38,7 +38,7 @@ function createValidMenu(overrides: Partial<DailyMenuSchema> = {}): DailyMenuSch
       {
         mealType: "colazione",
         dishName: "Porridge morbido mela e avena",
-        ingredients: ["Avena", "Mela cotta"],
+        ingredients: ["20 g avena", "40 g mela cotta"],
         preparation: "Cuoci e servi in crema morbida.",
         notes: ["Senza zucchero aggiunto"],
         safetyNotes: ["Servire tiepido"],
@@ -47,7 +47,7 @@ function createValidMenu(overrides: Partial<DailyMenuSchema> = {}): DailyMenuSch
       {
         mealType: "pranzo",
         dishName: "Crema di riso con lenticchie e zucchine",
-        ingredients: ["Riso", "Lenticchie decorticate", "Zucchine ben cotte"],
+        ingredients: ["25 g riso", "30 g lenticchie decorticate", "60 g zucchine ben cotte"],
         preparation: "Cuoci tutto e frulla in crema liscia.",
         notes: ["Aggiungi olio EVO a crudo"],
         safetyNotes: ["Consistenza morbida adatta a 6-8 mesi"],
@@ -62,7 +62,7 @@ function createValidMenu(overrides: Partial<DailyMenuSchema> = {}): DailyMenuSch
       {
         mealType: "merenda",
         dishName: "Yogurt bianco con pera",
-        ingredients: ["Yogurt bianco", "Pera cotta"],
+        ingredients: ["80 g yogurt bianco", "40 g pera cotta"],
         preparation: "Mescola e servi.",
         notes: ["Merenda semplice e nutriente"],
         safetyNotes: ["Consistenza omogenea"],
@@ -71,7 +71,7 @@ function createValidMenu(overrides: Partial<DailyMenuSchema> = {}): DailyMenuSch
       {
         mealType: "cena",
         dishName: "Vellutata di patate, merluzzo e carote",
-        ingredients: ["Patata", "Merluzzo", "Carote ben cotte"],
+        ingredients: ["60 g patata", "30 g merluzzo", "60 g carote ben cotte"],
         preparation: "Cuoci e frulla in vellutata morbida.",
         notes: ["Completa con olio extravergine a crudo"],
         safetyNotes: ["Controlla temperatura e consistenza"],
@@ -130,5 +130,51 @@ describe("menu-validator", () => {
     const result = validateDailyMenu(menu, createBasePolicy());
     expect(result.isValid).toBe(false);
     expect(result.issues.some((issue) => issue.includes("manca una fonte chiara di verdure"))).toBe(true);
+  });
+
+  it("rifiuta menu che ripete gli stessi alimenti tra colazione e merenda o tra pranzo e cena", () => {
+    const menu = createValidMenu({
+      meals: [
+        createValidMenu().meals[0],
+        {
+          ...createValidMenu().meals[1],
+          dishName: "Crema di riso con lenticchie e zucchine",
+          ingredients: ["25 g riso", "30 g lenticchie decorticate", "60 g zucchine ben cotte"],
+        },
+        {
+          ...createValidMenu().meals[2],
+          dishName: "Yogurt bianco con mela",
+          ingredients: ["80 g yogurt bianco", "40 g mela cotta"],
+        },
+        {
+          ...createValidMenu().meals[3],
+          dishName: "Vellutata di riso, lenticchie e zucchine",
+          ingredients: ["25 g riso", "30 g lenticchie decorticate", "60 g zucchine ben cotte"],
+        },
+      ],
+    });
+
+    const result = validateDailyMenu(menu, createBasePolicy());
+    expect(result.isValid).toBe(false);
+    expect(result.issues.some((issue) => issue.includes("Pranzo e cena non devono ripetere"))).toBe(true);
+  });
+
+  it("rifiuta porzioni eccessive o da adulto", () => {
+    const menu = createValidMenu({
+      meals: [
+        createValidMenu().meals[0],
+        {
+          ...createValidMenu().meals[1],
+          ingredients: ["220 g riso", "180 g pollo", "200 g zucchine"],
+          preparation: "Cuoci per 2 persone e servi in piatto abbondante.",
+        },
+        createValidMenu().meals[2],
+        createValidMenu().meals[3],
+      ],
+    });
+
+    const result = validateDailyMenu(menu, createBasePolicy());
+    expect(result.isValid).toBe(false);
+    expect(result.issues.some((issue) => issue.includes("1 solo bambino") || issue.includes("quantità troppo alta"))).toBe(true);
   });
 });

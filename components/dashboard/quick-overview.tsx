@@ -18,44 +18,44 @@ export function QuickOverview({ userName, unlockedCount, bonusCount, hasChildPro
         <CardDescription>
           Da qui gestisci i tuoi libri sbloccati, i bonus PDF e i menu giornalieri personalizzati.
         </CardDescription>
-        <div className="mt-5 flex flex-wrap gap-3">
+        <div className="mt-5 grid gap-3 sm:flex sm:flex-wrap">
           {hasChatAccess ? (
             <Link
               href="/dashboard/chat-menu"
-              className="rounded-2xl bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-600"
+              className="rounded-2xl bg-rose-500 px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-rose-600"
             >
               Cosa mangiamo oggi?
             </Link>
           ) : (
             <Link
               href="/dashboard/libri"
-              className="rounded-2xl bg-amber-100 px-4 py-2.5 text-sm font-semibold text-amber-900 transition hover:bg-amber-200"
+              className="rounded-2xl bg-amber-100 px-4 py-2.5 text-center text-sm font-semibold text-amber-900 transition hover:bg-amber-200"
             >
               Sblocca un libro per attivare la chat
             </Link>
           )}
           <Link
             href="/dashboard/libri"
-            className="rounded-2xl bg-rose-100 px-4 py-2.5 text-sm font-semibold text-rose-900 transition hover:bg-rose-200"
+            className="rounded-2xl bg-rose-100 px-4 py-2.5 text-center text-sm font-semibold text-rose-900 transition hover:bg-rose-200"
           >
             Sblocca un altro libro
           </Link>
           <Link
             href="/dashboard/supporto"
-            className="rounded-2xl bg-white px-4 py-2.5 text-sm font-semibold text-rose-800 shadow-sm ring-1 ring-rose-200 transition hover:bg-rose-50"
+            className="rounded-2xl bg-white px-4 py-2.5 text-center text-sm font-semibold text-rose-800 shadow-sm ring-1 ring-rose-200 transition hover:bg-rose-50"
           >
             Chiedi Supporto
           </Link>
           <Link
             href="/dashboard/impostazioni"
-            className="rounded-2xl bg-zinc-100 px-4 py-2.5 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-200"
+            className="rounded-2xl bg-zinc-100 px-4 py-2.5 text-center text-sm font-semibold text-zinc-800 transition hover:bg-zinc-200"
           >
             Impostazioni
           </Link>
         </div>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3">
         <Link href="/dashboard/libri" className="block">
           <Card className="transition hover:-translate-y-0.5 hover:border-rose-200 hover:shadow-[0_14px_35px_rgba(236,72,153,0.12)]">
             <CardTitle className="text-2xl">{unlockedCount}</CardTitle>

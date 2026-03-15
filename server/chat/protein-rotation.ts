@@ -1,10 +1,11 @@
 import { businessRulesConfig } from "@/config/business-rules";
 import type { DailyMenuSchema } from "@/server/chat/menu-schema";
 
-export type ProteinCategory = "carne" | "pesce" | "uova" | "legumi" | "formaggiFreschi";
+export type ProteinCategory = "carneRossa" | "carneBianca" | "pesce" | "uova" | "legumi" | "formaggiFreschi";
 
 export interface ProteinWeeklyStats {
-  carne: number;
+  carneRossa: number;
+  carneBianca: number;
   pesce: number;
   uova: number;
   legumi: number;
@@ -23,7 +24,7 @@ function normalizeText(input: string): string {
 function detectMealProteinCategory(text: string): ProteinCategory | null {
   const normalized = normalizeText(text);
 
-  const orderedCategories: ProteinCategory[] = ["pesce", "carne", "uova", "legumi", "formaggiFreschi"];
+  const orderedCategories: ProteinCategory[] = ["pesce", "carneRossa", "carneBianca", "uova", "legumi", "formaggiFreschi"];
   for (const category of orderedCategories) {
     const keywords = businessRulesConfig.proteinCategoryKeywords[category];
     if (keywords.some((keyword) => normalized.includes(normalizeText(keyword)))) {
@@ -36,7 +37,8 @@ function detectMealProteinCategory(text: string): ProteinCategory | null {
 
 export function createEmptyProteinStats(): ProteinWeeklyStats {
   return {
-    carne: 0,
+    carneRossa: 0,
+    carneBianca: 0,
     pesce: 0,
     uova: 0,
     legumi: 0,
@@ -66,7 +68,7 @@ export function computeProteinWeeklyStats(menus: DailyMenuSchema[]): ProteinWeek
 
 export function buildProteinRotationHint(stats: ProteinWeeklyStats): string {
   const parts: string[] = [
-    `Storico ultimi 7 giorni: carne ${stats.carne}, pesce ${stats.pesce}, uova ${stats.uova}, legumi ${stats.legumi}, formaggi freschi ${stats.formaggiFreschi}.`,
+    `Storico ultimi 7 giorni: carne rossa ${stats.carneRossa}, carne bianca ${stats.carneBianca}, pesce ${stats.pesce}, uova ${stats.uova}, legumi ${stats.legumi}, formaggi freschi ${stats.formaggiFreschi}.`,
   ];
 
   const targets = businessRulesConfig.proteinFrequencyTargets;

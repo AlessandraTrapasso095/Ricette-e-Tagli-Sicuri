@@ -1,4 +1,5 @@
 import type { MealType } from "@/config/business-rules";
+import type { BroadcastAudienceCategory } from "@/config/notification-preferences";
 
 export type FeedingStyle = "classico" | "autosvezzamento" | "misto";
 
@@ -64,4 +65,14 @@ export interface DailyMenu {
   dailyNotes: string[];
   warnings: string[];
   shoppingList: string[];
+}
+
+export interface BroadcastHistoryItem {
+  id: number;
+  sentAt: string;
+  category: BroadcastAudienceCategory;
+  categoryLabel: string;
+  subject: string;
+  recipients: number;
+  message: string | null;
 }

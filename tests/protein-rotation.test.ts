@@ -76,11 +76,14 @@ describe("protein-rotation", () => {
     const menus: DailyMenuSchema[] = [
       createMenuWithProteins(["Riso", "Pollo"], ["Patata", "Merluzzo"]),
       createMenuWithProteins(["Farro", "Lenticchie"], ["Pasta", "Ricotta"]),
+      createMenuWithProteins(["Riso", "Manzo"], ["Patata", "Uovo"]),
     ];
 
     const stats = computeProteinWeeklyStats(menus);
-    expect(stats.carne).toBe(1);
+    expect(stats.carneBianca).toBe(1);
+    expect(stats.carneRossa).toBe(1);
     expect(stats.pesce).toBe(1);
+    expect(stats.uova).toBe(1);
     expect(stats.legumi).toBe(1);
     expect(stats.formaggiFreschi).toBe(1);
   });

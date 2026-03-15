@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 
+import {
+  notificationPreferenceItems,
+  type NotificationPreferences,
+} from "@/config/notification-preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -10,27 +14,44 @@ interface AccountSettingsFormProps {
   initialEmail: string;
   initialFullName: string;
   initialDisplayName: string;
+  initialNotificationPreferences: NotificationPreferences;
+  profileEndpoint?: string;
+  notificationEndpoint?: string;
+  emailRedirectPath?: string;
 }
 
-export function AccountSettingsForm({ initialEmail, initialFullName, initialDisplayName }: AccountSettingsFormProps) {
+export function AccountSettingsForm({
+  initialEmail,
+  initialFullName,
+  initialDisplayName,
+  initialNotificationPreferences,
+  profileEndpoint = "/api/account/profile",
+  notificationEndpoint = "/api/account/notifications",
+  emailRedirectPath = "/dashboard/impostazioni",
+}: AccountSettingsFormProps) {
   const [fullName, setFullName] = useState(initialFullName);
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const [nextEmail, setNextEmail] = useState(initialEmail);
   const [nextPassword, setNextPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(
+    initialNotificationPreferences,
+  );
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingEmail, setSavingEmail] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
+  const [savingNotifications, setSavingNotifications] = useState(false);
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
   const [emailStatus, setEmailStatus] = useState<string | null>(null);
   const [passwordStatus, setPasswordStatus] = useState<string | null>(null);
+  const [notificationStatus, setNotificationStatus] = useState<string | null>(null);
 
   async function saveProfile() {
     setSavingProfile(true);
     setProfileStatus(null);
 
     try {
-      const response = await fetch("/api/account/profile", {
+      const response = await fetch(profileEndpoint, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -61,9 +82,11 @@ export function AccountSettingsForm({ initialEmail, initialFullName, initialDisp
     try {
       const supabase = createSupabaseBrowserClient();
       const redirectOrigin = window.location.origin;
+      const emailRedirectTo = new URL("/auth/callback", redirectOrigin);
+      emailRedirectTo.searchParams.set("next", emailRedirectPath);
       const { error } = await supabase.auth.updateUser(
         { email: nextEmail.trim() },
-        { emailRedirectTo: `${redirectOrigin}/auth/callback?next=/dashboard/impostazioni` },
+        { emailRedirectTo: emailRedirectTo.toString() },
       );
 
       if (error) {
@@ -107,6 +130,31 @@ export function AccountSettingsForm({ initialEmail, initialFullName, initialDisp
       setPasswordStatus(error instanceof Error ? error.message : "Aggiornamento password non riuscito.");
     } finally {
       setSavingPassword(false);
+    }
+  }
+
+  async function saveNotifications() {
+    setSavingNotifications(true);
+    setNotificationStatus(null);
+
+    try {
+      const response = await fetch(notificationEndpoint, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(notificationPreferences),
+      });
+      const json = await response.json();
+
+      if (!response.ok) {
+        throw new Error(json.error ?? "Aggiornamento notifiche non riuscito.");
+      }
+
+      setNotificationPreferences(json.data ?? notificationPreferences);
+      setNotificationStatus("Preferenze notifiche aggiornate correttamente.");
+    } catch (error) {
+      setNotificationStatus(error instanceof Error ? error.message : "Aggiornamento notifiche non riuscito.");
+    } finally {
+      setSavingNotifications(false);
     }
   }
 
@@ -160,9 +208,71 @@ export function AccountSettingsForm({ initialEmail, initialFullName, initialDisp
         </Button>
       </section>
 
+      <section className="space-y-3 rounded-2xl border border-zinc-200 p-4">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-600">Notifiche</h3>
+        <p className="text-sm text-zinc-600">
+          Scegli quali notifiche email desideri ricevere. Le comunicazioni essenziali di accesso, sicurezza e recupero
+          account restano sempre attive.
+        </p>
+        <div className="space-y-3">
+          {notificationPreferenceItems.map((item) => (
+            <label
+              key={item.key}
+              className="flex items-start gap-3 rounded-2xl border border-rose-100 bg-rose-50/40 p-4"
+            >
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 rounded border-rose-300 text-rose-600 focus:ring-rose-500"
+                checked={notificationPreferences[item.key]}
+                onChange={(event) =>
+                  setNotificationPreferences((current) => ({
+                    ...current,
+                    [item.key]: event.target.checked,
+                  }))
+                }
+              />
+              <span>
+                <span className="block text-sm font-medium text-zinc-800">{item.label}</span>
+                <span className="mt-1 block text-sm text-zinc-600">{item.description}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+        {notificationStatus ? <p className="text-sm text-zinc-700">{notificationStatus}</p> : null}
+        <Button type="button" variant="secondary" disabled={savingNotifications} onClick={saveNotifications}>
+          {savingNotifications ? "Salvataggio..." : "Salva notifiche"}
+        </Button>
+      </section>
+
       <section className="rounded-2xl border border-zinc-200 p-4">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-600">Altro</h3>
-        <p className="mt-2 text-sm text-zinc-600">Prossimamente: preferenze notifiche e gestione comunicazioni.</p>
+        <div className="mt-3 rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
+          <p className="text-sm font-medium text-zinc-800">Gestione comunicazioni</p>
+          <p className="mt-2 text-sm text-zinc-600">
+            Le preferenze notifiche controllano le email opzionali della piattaforma:
+          </p>
+          <ul className="mt-3 space-y-2 text-sm text-zinc-700">
+            <li>
+              <span className="font-medium">Ricezione comunicazioni:</span> aggiornamenti importanti, novità e avvisi
+              sulla piattaforma.
+            </li>
+            <li>
+              <span className="font-medium">Promozioni:</span> sconti, offerte e nuove uscite.
+            </li>
+            <li>
+              <span className="font-medium">Notifiche personali:</span> messaggi individuali legati al tuo account o a
+              iniziative dedicate.
+            </li>
+            <li>
+              <span className="font-medium">Ticket supporto:</span> avvisi quando arriva una nuova risposta nei tuoi
+              ticket.
+            </li>
+          </ul>
+          <p className="mt-3 text-sm text-zinc-600">
+            Restano sempre attive le email tecniche indispensabili, come conferma indirizzo email, recupero password e
+            sicurezza account.
+          </p>
+        </div>
       </section>
     </div>
   );

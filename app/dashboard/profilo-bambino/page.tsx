@@ -1,8 +1,13 @@
+import { ReaderAreaPageLayout } from "@/components/dashboard/reader-area-page-layout";
 import { ChildProfileForm } from "@/components/forms/child-profile-form";
 import { requireUser } from "@/server/auth/session";
 
 export default async function DashboardProfiloBambinoPage() {
   await requireUser("/login");
 
-  return <ChildProfileForm />;
+  return (
+    <ReaderAreaPageLayout>
+      <ChildProfileForm />
+    </ReaderAreaPageLayout>
+  );
 }

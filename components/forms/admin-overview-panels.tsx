@@ -35,6 +35,11 @@ interface TicketRow {
   message: string;
   created_at: string;
   admin_notes: string | null;
+  messages: {
+    sender: "utente" | "admin";
+    content: string;
+    created_at: string;
+  }[];
   books: {
     slug: string;
     title: string;

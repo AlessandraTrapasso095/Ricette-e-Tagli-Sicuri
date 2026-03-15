@@ -3,9 +3,11 @@ import "server-only";
 import { differenceInMonths } from "date-fns";
 
 import { AUTH_INACTIVITY_TIMEOUT_MS } from "@/config/auth";
+import { MENU_SESSION_RESET_TIMEZONE } from "@/config/chat-session";
 import { READER_BOOK_RECOMMENDATIONS, type RecommendedBook } from "@/config/recommended-books";
 import { normalizeBookAnswer } from "@/lib/text/normalize-answer";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getStartOfDayInTimeZone } from "@/lib/timezone/day-boundary";
 
 type FeedingStyle = "classico" | "autosvezzamento" | "misto";
 
@@ -764,6 +766,64 @@ export async function setAdminUserSuspension(params: {
   return {
     isSuspended: params.duration !== "none",
     bannedUntil: params.duration === "none" ? null : fromAuth ?? fallbackBannedUntil,
+  };
+}
+
+export async function resetAdminUserMenuChat(params: {
+  adminUserId: string;
+  userId: string;
+}) {
+  const admin = createSupabaseAdminClient();
+  const dayStartIso = getStartOfDayInTimeZone(new Date(), MENU_SESSION_RESET_TIMEZONE).toISOString();
+
+  const { data: sessions, error: sessionsError } = await admin
+    .from("menu_sessions")
+    .select("id")
+    .eq("user_id", params.userId)
+    .gte("created_at", dayStartIso);
+
+  if (sessionsError) {
+    throw new Error("Impossibile leggere le sessioni chat dell'utente.");
+  }
+
+  const sessionIds = (sessions ?? []).map((session) => session.id);
+
+  const { error: archiveError } = await admin
+    .from("menu_sessions")
+    .update({ is_archived: true })
+    .eq("user_id", params.userId)
+    .eq("is_archived", false)
+    .gte("created_at", dayStartIso);
+
+  if (archiveError) {
+    throw new Error("Impossibile archiviare le sessioni chat di oggi.");
+  }
+
+  const { error: deleteMessagesError } = await admin
+    .from("menu_messages")
+    .delete()
+    .eq("user_id", params.userId)
+    .gte("created_at", dayStartIso);
+
+  if (deleteMessagesError) {
+    throw new Error("Impossibile resettare i messaggi chat di oggi.");
+  }
+
+  await admin.from("audit_logs").insert({
+    actor_user_id: params.adminUserId,
+    entity: "menu_sessions",
+    entity_id: params.userId,
+    action: "menu_chat_reset",
+    details: {
+      resetFromDayStart: dayStartIso,
+      archivedSessionIds: sessionIds,
+      archivedSessionsCount: sessionIds.length,
+    },
+  });
+
+  return {
+    archivedSessionsCount: sessionIds.length,
+    resetFromDayStart: dayStartIso,
   };
 }
 

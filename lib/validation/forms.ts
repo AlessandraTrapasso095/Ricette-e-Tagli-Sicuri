@@ -60,6 +60,10 @@ export const supportTicketSchema = z.object({
   message: z.string().min(10, "Messaggio troppo breve.").max(4000, "Messaggio troppo lungo."),
 });
 
+export const supportTicketReplySchema = z.object({
+  message: z.string().min(2, "Scrivi un messaggio più chiaro.").max(4000, "Messaggio troppo lungo."),
+});
+
 export const chatPromptSchema = z.object({
   sessionId: z.preprocess((value) => (value === null ? undefined : value), z.string().uuid().optional()),
   sourceSessionId: z.preprocess((value) => (value === null ? undefined : value), z.string().uuid().optional()),
@@ -142,7 +146,12 @@ export const adminUserSuspendSchema = z.object({
   duration: z.enum(["1h", "24h", "168h", "permanent", "none"]),
 });
 
+export const adminUserMenuResetSchema = z.object({
+  userId: z.string().uuid("Utente non valido."),
+});
+
 export const adminBroadcastSchema = z.object({
+  category: z.enum(["communications", "promotions"]).default("communications"),
   subject: z.string().min(3, "Oggetto troppo breve.").max(160, "Oggetto troppo lungo."),
   message: z.string().min(10, "Messaggio troppo breve.").max(12000, "Messaggio troppo lungo."),
 });
@@ -154,6 +163,13 @@ export const adminReaderSettingsSchema = z.object({
 export const accountProfileSettingsSchema = z.object({
   fullName: z.string().min(2, "Inserisci nome e cognome.").max(120, "Nome troppo lungo."),
   displayName: z.string().min(2, "Inserisci almeno 2 caratteri.").max(60, "Nome utente troppo lungo."),
+});
+
+export const notificationPreferencesSchema = z.object({
+  communications: z.boolean(),
+  promotions: z.boolean(),
+  personalNotifications: z.boolean(),
+  ticketUpdates: z.boolean(),
 });
 
 export const supportTicketStatusSchema = z.enum(["inviato", "in_lavorazione", "risolto", "chiuso"]);

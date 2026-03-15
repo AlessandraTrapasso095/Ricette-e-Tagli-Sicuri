@@ -101,12 +101,14 @@ export function BookUnlockCard({ book, onUnlocked }: BookUnlockCardProps) {
 
   return (
     <Card>
-      <div className="flex items-start justify-between gap-3">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <CardTitle>{book.title}</CardTitle>
           <CardDescription>{book.description ?? "Libro della collana Area Lettori"}</CardDescription>
         </div>
-        {isUnlocked ? <Badge variant="success">Sbloccato</Badge> : <Badge variant="warning">Da sbloccare</Badge>}
+        <div className="sm:shrink-0">
+          {isUnlocked ? <Badge variant="success">Sbloccato</Badge> : <Badge variant="warning">Da sbloccare</Badge>}
+        </div>
       </div>
 
       {isUnlocked ? (
@@ -114,7 +116,7 @@ export function BookUnlockCard({ book, onUnlocked }: BookUnlockCardProps) {
       ) : (
         <div className="mt-4 space-y-3">
           {!challenge ? (
-            <Button variant="secondary" onClick={loadChallenge} disabled={loadingChallenge}>
+            <Button className="w-full sm:w-auto" variant="secondary" onClick={loadChallenge} disabled={loadingChallenge}>
               {loadingChallenge ? "Caricamento challenge..." : "Mostra challenge"}
             </Button>
           ) : (
@@ -129,7 +131,7 @@ export function BookUnlockCard({ book, onUnlocked }: BookUnlockCardProps) {
                 placeholder="Inserisci la parola segreta in minuscolo"
               />
               <p className="text-xs text-zinc-500">Inserisci la parola tutta in minuscolo.</p>
-              <Button type="submit" disabled={loadingSubmit || answer.trim().length === 0}>
+              <Button className="w-full sm:w-auto" type="submit" disabled={loadingSubmit || answer.trim().length === 0}>
                 {loadingSubmit ? "Verifica in corso..." : "Verifica e sblocca"}
               </Button>
             </form>

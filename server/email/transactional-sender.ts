@@ -27,8 +27,11 @@ export function hasCustomEmailTransport() {
   return hasResendTransport() || hasSmtpTransport();
 }
 
-function buildFromAddress() {
-  const fromEmail = getEnv("RESEND_FROM_EMAIL") ?? getEnv("SMTP_FROM_EMAIL") ?? getEnv("SMTP_USER") ?? DEFAULT_FROM_EMAIL;
+function buildFromAddress(transport: "resend" | "smtp") {
+  const fromEmail =
+    transport === "resend"
+      ? getEnv("RESEND_FROM_EMAIL") ?? getEnv("SMTP_FROM_EMAIL") ?? getEnv("SMTP_USER") ?? DEFAULT_FROM_EMAIL
+      : getEnv("SMTP_FROM_EMAIL") ?? getEnv("SMTP_USER") ?? getEnv("RESEND_FROM_EMAIL") ?? DEFAULT_FROM_EMAIL;
   const fromName = getEnv("SMTP_FROM_NAME") ?? DEFAULT_FROM_NAME;
   return `${fromName} <${fromEmail}>`;
 }
@@ -40,13 +43,26 @@ async function sendWithResend(params: SendTransactionalEmailParams) {
   }
 
   const resend = new Resend(apiKey);
-  await resend.emails.send({
-    from: buildFromAddress(),
+  const response = await resend.emails.send({
+    from: buildFromAddress("resend"),
     to: params.to,
     subject: params.subject,
     html: params.html,
     replyTo: params.replyTo,
   });
+
+  if (response.error) {
+    const message = response.error.message || "Invio email non riuscito tramite Resend.";
+    if (message.toLowerCase().includes("api key is invalid")) {
+      throw new Error("RESEND_API_KEY non valida. Aggiorna la chiave Resend oppure configura SMTP_PASSWORD per usare Gmail SMTP.");
+    }
+
+    throw new Error(message);
+  }
+
+  if (!response.data?.id) {
+    throw new Error("Resend non ha confermato l'accettazione dell'email.");
+  }
 }
 
 async function sendWithSmtp(params: SendTransactionalEmailParams) {
@@ -76,7 +92,7 @@ async function sendWithSmtp(params: SendTransactionalEmailParams) {
   });
 
   await transporter.sendMail({
-    from: buildFromAddress(),
+    from: buildFromAddress("smtp"),
     to: params.to,
     subject: params.subject,
     html: params.html,

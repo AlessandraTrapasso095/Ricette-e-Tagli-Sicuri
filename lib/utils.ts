@@ -5,10 +5,22 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function toArrayFromCsv(input: string): string[] {
+function cleanListValue(input: string) {
   return input
-    .split(",")
-    .map((value) => value.trim())
+    .normalize("NFKC")
+    .replace(/[()[\]{}]/g, " ")
+    .replace(/[’‘`´]/g, "'")
+    .replace(/^[-•]\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function toArrayFromCsv(input: string | string[]): string[] {
+  const source = Array.isArray(input) ? input.join(",") : input;
+
+  return source
+    .split(/[,\n;]+/)
+    .map((value) => cleanListValue(value))
     .filter(Boolean);
 }
 

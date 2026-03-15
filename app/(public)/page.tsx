@@ -41,41 +41,41 @@ const faqs = [
 export default function LandingPage() {
   return (
     <div>
-      <section className="relative min-h-[calc(100svh-80px)] overflow-hidden px-4 pb-20 pt-8 sm:px-6 sm:pt-10 lg:px-8 lg:pb-24 lg:pt-12">
+      <section className="relative min-h-[calc(100svh-72px)] overflow-hidden px-4 pb-14 pt-6 sm:px-6 sm:pb-20 sm:pt-8 lg:px-8 lg:pb-24 lg:pt-10">
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_10%_20%,rgba(244,114,182,0.18),transparent_42%),radial-gradient(circle_at_90%_10%,rgba(253,186,116,0.2),transparent_36%)]" />
-        <div className="mx-auto grid w-full max-w-7xl gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
+        <div className="mx-auto grid w-full max-w-7xl gap-8 sm:gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-start lg:gap-12">
           <div>
-            <p className="mb-5 inline-flex rounded-full bg-rose-100 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-rose-700">
+            <p className="mb-4 inline-flex rounded-full bg-rose-100 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-rose-700 sm:mb-5 sm:px-4 sm:text-xs">
               Area Lettori Privata
             </p>
-            <h1 className="font-heading text-4xl leading-tight text-rose-900 sm:text-5xl">
+            <h1 className="font-heading text-3xl leading-tight text-rose-900 sm:text-4xl lg:text-5xl">
               Ricette e Tagli Sicuri:
               <br />
               tutto il tuo percorso in un unico posto
             </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-relaxed text-zinc-600">
+            <p className="mt-5 max-w-2xl text-base leading-relaxed text-zinc-600 sm:text-lg">
               Verifica il tuo libro e accedi al tuo profilo personale con menu pensati unicamente per tuo figlio, tutto a portata
               di mano.
             </p>
-            <p className="mt-5 text-lg font-bold text-rose-900 sm:text-xl">Lo svezzamento non è mai sato cosi facile!</p>
-            <div className="mt-8 flex flex-wrap gap-4">
+            <p className="mt-4 text-lg font-bold text-rose-900 sm:mt-5 sm:text-xl">Lo svezzamento non è mai sato cosi facile!</p>
+            <div className="mt-7 grid gap-3 sm:mt-8 sm:flex sm:flex-wrap sm:gap-4">
               <Link
                 href="/register"
-                className="rounded-2xl bg-rose-500 px-6 py-3.5 text-base font-semibold text-white transition hover:bg-rose-600"
+                className="rounded-2xl bg-rose-500 px-6 py-3.5 text-center text-base font-semibold text-white transition hover:bg-rose-600"
               >
                 Registrati ora
               </Link>
               <Link
                 href="/login"
-                className="rounded-2xl bg-white px-6 py-3.5 text-base font-semibold text-rose-800 shadow-sm ring-1 ring-rose-200 transition hover:bg-rose-50"
+                className="rounded-2xl bg-white px-6 py-3.5 text-center text-base font-semibold text-rose-800 shadow-sm ring-1 ring-rose-200 transition hover:bg-rose-50"
               >
                 Ho già un account
               </Link>
             </div>
           </div>
-          <Card className="p-10 lg:mt-20 xl:mt-24">
-            <h2 className="font-heading text-2xl text-rose-900">Cosa trovi nell&apos;Area Lettori</h2>
-            <ul className="mt-5 space-y-4 text-sm text-zinc-700">
+          <Card className="p-6 sm:p-8 lg:mt-14 xl:mt-20">
+            <h2 className="font-heading text-2xl text-rose-900 sm:text-3xl">Cosa trovi nell&apos;Area Lettori</h2>
+            <ul className="mt-4 space-y-3 text-sm text-zinc-700 sm:mt-5 sm:space-y-4 sm:text-base">
               {benefits.map((item) => (
                 <li key={item} className="flex gap-2">
                   <span className="mt-1.5 h-2.5 w-2.5 rounded-full bg-rose-400" />
@@ -89,7 +89,7 @@ export default function LandingPage() {
 
       <section className="px-4 pb-20 sm:px-6 lg:px-8">
         <div className="mx-auto w-full max-w-7xl">
-          <h2 className="font-heading text-4xl text-rose-900">Come funziona</h2>
+          <h2 className="font-heading text-3xl text-rose-900 sm:text-4xl">Come funziona</h2>
           <div className="mt-7 grid gap-5 md:grid-cols-2">
             {steps.map((step, index) => (
               <Card key={step} className="bg-white">
@@ -103,9 +103,9 @@ export default function LandingPage() {
 
       <section className="bg-white px-4 py-20 sm:px-6 lg:px-8">
         <div className="mx-auto w-full max-w-7xl">
-          <h2 className="font-heading text-4xl text-rose-900">Chi è Lorena Mariani?</h2>
-          <Card className="mt-7 p-8">
-            <div className="space-y-4 text-base leading-relaxed text-zinc-700">
+          <h2 className="font-heading text-3xl text-rose-900 sm:text-4xl">Chi è Lorena Mariani?</h2>
+          <Card className="mt-7 p-5 sm:p-8">
+            <div className="space-y-4 text-sm leading-relaxed text-zinc-700 sm:text-base">
               {lorenaBioParagraphs.map((paragraph) => (
                 <p key={paragraph}>{paragraph}</p>
               ))}
@@ -118,7 +118,7 @@ export default function LandingPage() {
 
       <section className="bg-white px-4 pt-8 pb-20 sm:px-6 lg:px-8 lg:pt-10">
         <div className="mx-auto w-full max-w-7xl">
-          <h2 className="font-heading text-4xl text-rose-900">Domande frequenti</h2>
+          <h2 className="font-heading text-3xl text-rose-900 sm:text-4xl">Domande frequenti</h2>
           <div className="mt-7 grid gap-5 lg:grid-cols-3">
             {faqs.map((faq) => (
               <Card key={faq.q}>

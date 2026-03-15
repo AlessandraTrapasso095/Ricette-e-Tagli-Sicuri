@@ -13,6 +13,32 @@ export function normalizeFreeText(input: string): string {
     .trim();
 }
 
+const TRAILING_EXCLUSION_NOISE = [
+  "oggi",
+  "stasera",
+  "domani",
+  "per favore",
+  "grazie",
+  "ti prego",
+];
+
+function cleanExtractedExclusion(input: string) {
+  let value = normalizeFreeText(input)
+    .replace(/^(?:il|lo|la|i|gli|le|un|uno|una)\s+/, "")
+    .replace(/[()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  for (const noise of TRAILING_EXCLUSION_NOISE) {
+    const suffix = ` ${noise}`;
+    if (value.endsWith(suffix)) {
+      value = value.slice(0, -suffix.length).trim();
+    }
+  }
+
+  return value;
+}
+
 export function extractCustomExclusions(userPrompt: string): string[] {
   const text = normalizeFreeText(userPrompt);
   const candidates = new Set<string>();
@@ -22,21 +48,42 @@ export function extractCustomExclusions(userPrompt: string): string[] {
     if (segment.includes("senza ")) {
       const value = segment.split("senza ")[1]?.trim();
       if (value) {
-        candidates.add(value.split(" ").slice(0, 3).join(" "));
+        candidates.add(cleanExtractedExclusion(value.split(" ").slice(0, 4).join(" ")));
       }
     }
 
     if (segment.startsWith("no ")) {
       const value = segment.slice(3).trim();
       if (value) {
-        candidates.add(value.split(" ").slice(0, 3).join(" "));
+        candidates.add(cleanExtractedExclusion(value.split(" ").slice(0, 4).join(" ")));
       }
     }
 
     if (segment.includes("non ho ")) {
       const value = segment.split("non ho ")[1]?.trim();
       if (value) {
-        candidates.add(value.split(" ").slice(0, 4).join(" "));
+        candidates.add(cleanExtractedExclusion(value.split(" ").slice(0, 4).join(" ")));
+      }
+    }
+
+    if (segment.includes("non abbiamo ")) {
+      const value = segment.split("non abbiamo ")[1]?.trim();
+      if (value) {
+        candidates.add(cleanExtractedExclusion(value.split(" ").slice(0, 4).join(" ")));
+      }
+    }
+
+    if (segment.includes("niente ")) {
+      const value = segment.split("niente ")[1]?.trim();
+      if (value) {
+        candidates.add(cleanExtractedExclusion(value.split(" ").slice(0, 4).join(" ")));
+      }
+    }
+
+    if (segment.includes("evita ")) {
+      const value = segment.split("evita ")[1]?.trim();
+      if (value) {
+        candidates.add(cleanExtractedExclusion(value.split(" ").slice(0, 4).join(" ")));
       }
     }
   }

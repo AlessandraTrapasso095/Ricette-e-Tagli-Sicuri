@@ -8,10 +8,15 @@ interface MenuValidationResult {
 }
 
 const MAIN_MEALS = new Set(["pranzo", "cena"]);
-const SOFT_TEXTURE_TERMS = ["crema", "vellutata", "morbid", "schiacciat", "frullat", "pappa"];
+const SOFT_TEXTURE_TERMS = ["crema", "vellutata", "morbid", "schiacciat", "frullat", "pappa", "purea", "passat"];
 const SMALL_PIECES_TERMS = ["piccoli pezzi", "pezzi piccoli", "morbid", "schiacciat", "tritat"];
-const CLASSICO_TERMS = ["crema", "vellutata", "pappa", "schiacciat"];
-const AUTOSVEZZAMENTO_TERMS = ["bastonc", "polpett", "finger", "frittat", "pancake", "pasta corta", "tagli sicuri"];
+const CLASSICO_ALLOWED_TERMS = ["crema", "vellutata", "pappa", "schiacciat", "purea", "passat", "pastina", "baby riso", "porridge", "yogurt", "frullat"];
+const CLASSICO_FORBIDDEN_TERMS = ["polpett", "burger", "pancake", "finger", "bastonc", "pane", "tort", "pezz", "formato grande", "frittat"];
+const AUTOSVEZZAMENTO_TERMS = ["bastonc", "polpett", "finger", "frittat", "pancake", "pasta corta", "tagli sicuri", "burger", "pane", "tort", "porridge"];
+const INGREDIENT_QUANTITY_PATTERN =
+  /\b(\d+(?:[.,]\d+)?\s?(?:g|gr|grammi|ml|cucchiaini?|cucchiai|vasetto|vasetti|fette?|pezzi?|pz)|1\/2|mezzo|mezza|q\.b\.|qb|un cucchiaino|una fetta|uno yogurt|una banana)\b/i;
+const BROAD_KEYWORDS_TO_IGNORE = new Set(["carne", "pesce", "uovo", "uova", "legumi", "verdure", "frutta", "cereali"]);
+const ADULT_SERVING_TERMS = ["per 2", "per due", "per 3", "per 4", "per tutta la famiglia", "porzione abbondante", "piatto abbondante"];
 
 function normalizeText(input: string): string {
   return input
@@ -159,7 +164,7 @@ function validateAgeConsistency(menu: DailyMenuSchema, policy: MenuPolicyContext
     issues.push("Per 6-8 mesi servono consistenze molto morbide (creme/vellutate/schiacciato).");
   }
 
-  if (policy.ageStage === "8_10" && !includesAny(mainMealsText, SMALL_PIECES_TERMS)) {
+  if (policy.ageStage === "8_10" && policy.feedingStyle !== "classico" && !includesAny(mainMealsText, SMALL_PIECES_TERMS)) {
     issues.push("Per 8-10 mesi servono indicazioni su piccoli pezzi morbidi o consistenze equivalenti.");
   }
 }
@@ -172,19 +177,80 @@ function validateFeedingStyle(menu: DailyMenuSchema, policy: MenuPolicyContext, 
       .join(" "),
   );
 
-  if (policy.feedingStyle === "classico" && !includesAny(mainMealsText, CLASSICO_TERMS)) {
-    issues.push("Nello svezzamento classico devono comparire consistenze progressive (crema/vellutata/pappa).");
+  if (policy.feedingStyle === "classico") {
+    if (!includesAny(mainMealsText, CLASSICO_ALLOWED_TERMS)) {
+      issues.push("Nello svezzamento classico devono comparire creme, puree, pastina, baby riso, porridge o consistenze frullate.");
+    }
+
+    if (includesAny(mainMealsText, CLASSICO_FORBIDDEN_TERMS)) {
+      issues.push("Nello svezzamento classico non sono ammessi polpette, burger, pancake, finger food, pane, torte o pezzi.");
+    }
   }
 
   if (policy.feedingStyle === "autosvezzamento" && !includesAny(mainMealsText, AUTOSVEZZAMENTO_TERMS)) {
-    issues.push("Nell'autosvezzamento servono pezzi/finger food e tagli sicuri espliciti.");
+    issues.push("Nell'autosvezzamento servono porridge, polpette, pancake, burger morbidi, pane o finger food nei tagli sicuri.");
   }
 
   if (policy.feedingStyle === "misto") {
-    const hasClassico = includesAny(mainMealsText, CLASSICO_TERMS);
+    const hasClassico = includesAny(mainMealsText, CLASSICO_ALLOWED_TERMS);
     const hasAuto = includesAny(mainMealsText, AUTOSVEZZAMENTO_TERMS);
     if (!hasClassico || !hasAuto) {
-      issues.push("Nello svezzamento misto combina elementi classici e autosvezzamento.");
+      issues.push("Nello svezzamento misto devi combinare davvero una proposta classica e una proposta da autosvezzamento.");
+    }
+  }
+}
+
+function validateIngredientQuantities(menu: DailyMenuSchema, issues: string[]) {
+  for (const meal of menu.meals) {
+    for (const ingredient of meal.ingredients) {
+      if (!INGREDIENT_QUANTITY_PATTERN.test(ingredient)) {
+        issues.push(`${meal.mealType}: ogni ingrediente deve includere un dosaggio o una misura concreta (${ingredient}).`);
+      }
+    }
+  }
+}
+
+function validatePortionSizes(menu: DailyMenuSchema, issues: string[]) {
+  const thresholds = businessRulesConfig.portionGuidance.maxThresholds;
+
+  for (const meal of menu.meals) {
+    const mealText = normalizeText(`${meal.dishName} ${meal.ingredients.join(" ")} ${meal.preparation} ${meal.notes.join(" ")}`);
+    if (ADULT_SERVING_TERMS.some((term) => mealText.includes(normalizeText(term)))) {
+      issues.push(`${meal.mealType}: il menu deve essere per 1 solo bambino, non per più persone.`);
+    }
+
+    for (const ingredient of meal.ingredients) {
+      const normalizedIngredient = normalizeText(ingredient);
+      const matches = [...normalizedIngredient.matchAll(/(\d+(?:[.,]\d+)?)\s*(g|gr|grammi|ml|cucchiai?|cucchiaini?|fette?|pezzi?|pz)\b/g)];
+
+      for (const match of matches) {
+        const rawValue = match[1]?.replace(",", ".");
+        const unit = match[2];
+        const value = rawValue ? Number(rawValue) : Number.NaN;
+        if (!Number.isFinite(value) || !unit) {
+          continue;
+        }
+
+        if ((unit === "g" || unit === "gr" || unit === "grammi") && value > thresholds.grams) {
+          issues.push(`${meal.mealType}: quantità troppo alta per 1 bambino (${ingredient}).`);
+        }
+
+        if (unit === "ml" && value > thresholds.milliliters) {
+          issues.push(`${meal.mealType}: liquidi troppo abbondanti per 1 bambino (${ingredient}).`);
+        }
+
+        if ((unit === "cucchiai" || unit === "cucchiaio") && value > thresholds.tablespoons) {
+          issues.push(`${meal.mealType}: troppi cucchiai per una porzione piccola (${ingredient}).`);
+        }
+
+        if ((unit === "cucchiaini" || unit === "cucchiaino") && value > thresholds.teaspoons) {
+          issues.push(`${meal.mealType}: troppi cucchiaini per una porzione piccola (${ingredient}).`);
+        }
+
+        if ((unit === "fette" || unit === "fetta" || unit === "pezzi" || unit === "pezzo" || unit === "pz") && value > thresholds.pieces) {
+          issues.push(`${meal.mealType}: porzione troppo grande per 1 bambino (${ingredient}).`);
+        }
+      }
     }
   }
 }
@@ -234,6 +300,47 @@ function validateVariety(menu: DailyMenuSchema, issues: string[]) {
   }
 }
 
+function getSpecificFoodKeywords() {
+  return [
+    ...businessRulesConfig.ingredientGroups.carbs,
+    ...businessRulesConfig.ingredientGroups.proteins,
+    ...businessRulesConfig.ingredientGroups.vegetables,
+    ...businessRulesConfig.ingredientGroups.fruits,
+    ...Object.values(businessRulesConfig.proteinCategoryKeywords).flat(),
+  ]
+    .map((item) => normalizeText(item))
+    .filter((item) => item.length > 1 && !BROAD_KEYWORDS_TO_IGNORE.has(item));
+}
+
+function extractRepeatedFoods(firstMeal: DailyMenuSchema["meals"][number], secondMeal: DailyMenuSchema["meals"][number]) {
+  const keywords = getSpecificFoodKeywords();
+  const firstText = normalizeText(`${firstMeal.dishName} ${firstMeal.ingredients.join(" ")} ${firstMeal.preparation}`);
+  const secondText = normalizeText(`${secondMeal.dishName} ${secondMeal.ingredients.join(" ")} ${secondMeal.preparation}`);
+
+  return keywords.filter((keyword) => firstText.includes(keyword) && secondText.includes(keyword));
+}
+
+function validateDailyRotation(menu: DailyMenuSchema, issues: string[]) {
+  const breakfast = menu.meals.find((meal) => meal.mealType === "colazione");
+  const snack = menu.meals.find((meal) => meal.mealType === "merenda");
+  const lunch = menu.meals.find((meal) => meal.mealType === "pranzo");
+  const dinner = menu.meals.find((meal) => meal.mealType === "cena");
+
+  if (breakfast && snack) {
+    const repeated = extractRepeatedFoods(breakfast, snack);
+    if (repeated.length > 0) {
+      issues.push(`Colazione e merenda non devono ripetere gli stessi alimenti principali (${[...new Set(repeated)].join(", ")}).`);
+    }
+  }
+
+  if (lunch && dinner) {
+    const repeated = extractRepeatedFoods(lunch, dinner);
+    if (repeated.length > 0) {
+      issues.push(`Pranzo e cena non devono ripetere gli stessi alimenti principali (${[...new Set(repeated)].join(", ")}).`);
+    }
+  }
+}
+
 export function validateDailyMenu(menu: DailyMenuSchema, policy: MenuPolicyContext): MenuValidationResult {
   const issues: string[] = [];
 
@@ -244,7 +351,10 @@ export function validateDailyMenu(menu: DailyMenuSchema, policy: MenuPolicyConte
   validateAgeConsistency(menu, policy, issues);
   validateFeedingStyle(menu, policy, issues);
   validateSafeCuts(menu, issues);
+  validateIngredientQuantities(menu, issues);
+  validatePortionSizes(menu, issues);
   validateVariety(menu, issues);
+  validateDailyRotation(menu, issues);
 
   return {
     isValid: issues.length === 0,

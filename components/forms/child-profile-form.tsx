@@ -170,7 +170,7 @@ export function ChildProfileForm() {
 
         {statusMessage ? <p className="text-sm text-zinc-700">{statusMessage}</p> : null}
 
-        <Button type="submit" disabled={loading}>
+        <Button className="w-full sm:w-auto" type="submit" disabled={loading}>
           {loading ? "Salvataggio..." : "Salva profilo"}
         </Button>
       </form>

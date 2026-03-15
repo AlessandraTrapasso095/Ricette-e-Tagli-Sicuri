@@ -4,6 +4,15 @@ import { toArrayFromCsv } from "@/lib/utils";
 import type { ChildProfile } from "@/types/domain";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
+function normalizeChildProfile(profile: ChildProfile): ChildProfile {
+  return {
+    ...profile,
+    allergies: toArrayFromCsv(profile.allergies ?? []),
+    foods_to_avoid: toArrayFromCsv(profile.foods_to_avoid ?? []),
+    foods_introduced: toArrayFromCsv(profile.foods_introduced ?? []),
+  };
+}
+
 export async function getPrimaryChildProfile(userId: string): Promise<ChildProfile | null> {
   const admin = createSupabaseAdminClient();
 
@@ -11,14 +20,16 @@ export async function getPrimaryChildProfile(userId: string): Promise<ChildProfi
     .from("children")
     .select("*")
     .eq("user_id", userId)
-    .eq("is_primary", true)
-    .maybeSingle();
+    .order("is_primary", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1);
 
   if (error) {
     throw error;
   }
 
-  return (data as ChildProfile) ?? null;
+  const profile = Array.isArray(data) ? data[0] : null;
+  return profile ? normalizeChildProfile(profile as ChildProfile) : null;
 }
 
 export async function savePrimaryChildProfile(params: {
@@ -63,7 +74,7 @@ export async function savePrimaryChildProfile(params: {
       throw error;
     }
 
-    return data;
+    return normalizeChildProfile(data as ChildProfile);
   }
 
   const { data, error } = await admin.from("children").insert(payload).select("*").single();
@@ -72,5 +83,5 @@ export async function savePrimaryChildProfile(params: {
     throw error;
   }
 
-  return data;
+  return normalizeChildProfile(data as ChildProfile);
 }
