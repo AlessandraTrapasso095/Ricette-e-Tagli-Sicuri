@@ -30,7 +30,7 @@ export default async function LoginPage({
   return (
     <div className="mx-auto w-full max-w-xl px-4 py-14 sm:px-6 lg:px-8">
       <Card>
-        <h1 className="font-heading text-3xl text-rose-900">Bentornata nell&apos;Area Lettori</h1>
+        <h1 className="font-heading text-3xl text-rose-900">Accedi all&apos;Area Lettori</h1>
         <p className="mt-2 text-sm text-zinc-600">Accedi per visualizzare libri sbloccati, bonus e chat menu.</p>
         {reasonMessage ? <p className="mt-2 text-sm text-amber-700">{reasonMessage}</p> : null}
         <div className="mt-6">

@@ -46,12 +46,17 @@ export async function GET(request: Request) {
     const dashboardUrl = `${baseUrl}/dashboard`;
     const fullName =
       typeof effectiveUser.user_metadata?.full_name === "string" ? effectiveUser.user_metadata.full_name : null;
+    const gender =
+      effectiveUser.user_metadata?.gender === "maschio" || effectiveUser.user_metadata?.gender === "femmina"
+        ? (effectiveUser.user_metadata.gender as "maschio" | "femmina")
+        : null;
 
     try {
       await sendWelcomeEmailOnce({
         userId: effectiveUser.id,
         email: effectiveUser.email,
         fullName,
+        gender,
         dashboardUrl,
       });
     } catch (error) {

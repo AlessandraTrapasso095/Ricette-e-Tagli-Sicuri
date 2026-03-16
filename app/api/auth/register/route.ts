@@ -107,6 +107,7 @@ async function fallbackSignupWithSupabaseDefaultEmail(params: {
   email: string;
   password: string;
   fullName: string;
+  gender: "femmina" | "maschio";
   redirectTo: string;
 }) {
   const supabase = createClient(getRequiredEnv("NEXT_PUBLIC_SUPABASE_URL"), getRequiredEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"), {
@@ -123,6 +124,7 @@ async function fallbackSignupWithSupabaseDefaultEmail(params: {
       emailRedirectTo: params.redirectTo,
       data: {
         full_name: params.fullName,
+        gender: params.gender,
       },
     },
   });
@@ -183,6 +185,7 @@ export async function POST(request: Request) {
         email: parsed.data.email,
         password: parsed.data.password,
         fullName: parsed.data.fullName,
+        gender: parsed.data.gender,
         redirectTo,
       });
 
@@ -193,6 +196,7 @@ export async function POST(request: Request) {
           .update({
             full_name: parsed.data.fullName,
             display_name: parsed.data.fullName,
+            gender: parsed.data.gender,
           })
           .eq("id", fallbackResult.userId);
       }
@@ -212,6 +216,7 @@ export async function POST(request: Request) {
       options: {
         data: {
           full_name: parsed.data.fullName,
+          gender: parsed.data.gender,
         },
         redirectTo,
       },
@@ -232,6 +237,7 @@ export async function POST(request: Request) {
         .update({
           full_name: parsed.data.fullName,
           display_name: parsed.data.fullName,
+          gender: parsed.data.gender,
         })
         .eq("id", data.user.id);
     }
@@ -240,6 +246,7 @@ export async function POST(request: Request) {
       await sendSignupVerificationEmail({
         email: parsed.data.email,
         fullName: parsed.data.fullName,
+        gender: parsed.data.gender,
         confirmLink: actionLink,
       });
     } catch {

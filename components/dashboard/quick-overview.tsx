@@ -1,21 +1,23 @@
 import Link from "next/link";
 
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { getDashboardWelcome, type OptionalUserGender } from "@/lib/user-gender";
 
 interface QuickOverviewProps {
   userName: string;
+  gender: OptionalUserGender;
   unlockedCount: number;
   bonusCount: number;
   hasChildProfile: boolean;
   hasChatAccess: boolean;
 }
 
-export function QuickOverview({ userName, unlockedCount, bonusCount, hasChildProfile, hasChatAccess }: QuickOverviewProps) {
+export function QuickOverview({ userName, gender, unlockedCount, bonusCount, hasChildProfile, hasChatAccess }: QuickOverviewProps) {
   return (
     <div className="space-y-5">
       <Card className="rounded-[2rem] px-5 pb-7 pt-8 text-center shadow-[0_14px_34px_rgba(236,72,153,0.07)] sm:rounded-3xl sm:p-6 sm:text-left sm:shadow-[0_10px_35px_rgba(236,72,153,0.08)]">
         <CardTitle className="mx-auto max-w-[15.75rem] text-[1.52rem] leading-[1.24] font-bold tracking-[-0.02em] sm:mx-0 sm:max-w-none sm:text-[2.05rem] sm:font-semibold">
-          Ciao {userName}, benvenuta nell&apos;Area Lettori
+          Ciao {userName}, {getDashboardWelcome(gender)}
         </CardTitle>
         <CardDescription className="mx-auto mt-5 max-w-[16.75rem] text-[0.88rem] leading-[1.6] text-zinc-500 sm:mx-0 sm:mt-3 sm:max-w-none sm:text-base sm:leading-relaxed">
           Da qui gestisci i tuoi libri sbloccati, i bonus PDF e i menu giornalieri personalizzati.

@@ -18,7 +18,7 @@ export default async function AdminImpostazioniPage() {
     supabase
       .from("profiles")
       .select(
-        "full_name, display_name, email, receive_communications, receive_promotions, receive_personal_notifications, receive_ticket_updates",
+        "full_name, display_name, email, gender, receive_communications, receive_promotions, receive_personal_notifications, receive_ticket_updates",
       )
       .eq("id", user.id)
       .maybeSingle(),
@@ -36,6 +36,7 @@ export default async function AdminImpostazioniPage() {
           initialFullName={profile?.full_name ?? ""}
           initialDisplayName={profile?.display_name ?? profile?.full_name ?? ""}
           initialEmail={profile?.email ?? user.email ?? ""}
+          initialGender={profile?.gender === "maschio" || profile?.gender === "femmina" ? profile.gender : null}
           initialNotificationPreferences={{
             communications: profile?.receive_communications ?? DEFAULT_NOTIFICATION_PREFERENCES.communications,
             promotions: profile?.receive_promotions ?? DEFAULT_NOTIFICATION_PREFERENCES.promotions,

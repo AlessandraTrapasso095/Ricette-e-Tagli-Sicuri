@@ -8,12 +8,17 @@ import {
 } from "@/config/notification-preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import type { OptionalUserGender, UserGender } from "@/lib/user-gender";
+
+type ProfileGenderValue = UserGender | "";
 
 interface AccountSettingsFormProps {
   initialEmail: string;
   initialFullName: string;
   initialDisplayName: string;
+  initialGender: OptionalUserGender;
   initialNotificationPreferences: NotificationPreferences;
   profileEndpoint?: string;
   notificationEndpoint?: string;
@@ -24,6 +29,7 @@ export function AccountSettingsForm({
   initialEmail,
   initialFullName,
   initialDisplayName,
+  initialGender,
   initialNotificationPreferences,
   profileEndpoint = "/api/account/profile",
   notificationEndpoint = "/api/account/notifications",
@@ -31,6 +37,7 @@ export function AccountSettingsForm({
 }: AccountSettingsFormProps) {
   const [fullName, setFullName] = useState(initialFullName);
   const [displayName, setDisplayName] = useState(initialDisplayName);
+  const [gender, setGender] = useState<ProfileGenderValue>(initialGender ?? "");
   const [nextEmail, setNextEmail] = useState(initialEmail);
   const [nextPassword, setNextPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -50,6 +57,12 @@ export function AccountSettingsForm({
     setSavingProfile(true);
     setProfileStatus(null);
 
+    if (!gender) {
+      setSavingProfile(false);
+      setProfileStatus("Seleziona maschio o femmina.");
+      return;
+    }
+
     try {
       const response = await fetch(profileEndpoint, {
         method: "PATCH",
@@ -57,6 +70,7 @@ export function AccountSettingsForm({
         body: JSON.stringify({
           fullName,
           displayName,
+          gender,
         }),
       });
       const json = await response.json();
@@ -67,6 +81,7 @@ export function AccountSettingsForm({
 
       setFullName(json.data?.fullName ?? fullName);
       setDisplayName(json.data?.displayName ?? displayName);
+      setGender(json.data?.gender ?? gender);
       setProfileStatus("Profilo aggiornato correttamente.");
     } catch (error) {
       setProfileStatus(error instanceof Error ? error.message : "Aggiornamento profilo non riuscito.");
@@ -171,6 +186,16 @@ export function AccountSettingsForm({
             <label className="text-sm font-medium text-zinc-700">Nome utente</label>
             <Input value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
           </div>
+        </div>
+        <div>
+          <label className="text-sm font-medium text-zinc-700">Genere</label>
+          <Select value={gender} onChange={(event) => setGender(event.target.value as ProfileGenderValue)}>
+            <option value="" disabled>
+              Seleziona maschio o femmina
+            </option>
+            <option value="femmina">Femmina</option>
+            <option value="maschio">Maschio</option>
+          </Select>
         </div>
         {profileStatus ? <p className="text-sm text-zinc-700">{profileStatus}</p> : null}
         <Button type="button" disabled={savingProfile} onClick={saveProfile}>

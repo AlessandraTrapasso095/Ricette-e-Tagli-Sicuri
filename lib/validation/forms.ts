@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { USER_GENDERS } from "@/lib/user-gender";
+
 export const loginSchema = z.object({
   email: z.email("Inserisci una email valida."),
   password: z.string().min(8, "La password deve contenere almeno 8 caratteri."),
@@ -11,6 +13,9 @@ export const registerSchema = z
     password: z.string().min(8, "La password deve contenere almeno 8 caratteri."),
     confirmPassword: z.string().min(8, "Conferma la password."),
     fullName: z.string().min(2, "Inserisci nome e cognome."),
+    gender: z.enum(USER_GENDERS, {
+      error: "Seleziona maschio o femmina.",
+    }),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Le password non coincidono.",
@@ -163,6 +168,9 @@ export const adminReaderSettingsSchema = z.object({
 export const accountProfileSettingsSchema = z.object({
   fullName: z.string().min(2, "Inserisci nome e cognome.").max(120, "Nome troppo lungo."),
   displayName: z.string().min(2, "Inserisci almeno 2 caratteri.").max(60, "Nome utente troppo lungo."),
+  gender: z.enum(USER_GENDERS, {
+    error: "Seleziona maschio o femmina.",
+  }),
 });
 
 export const notificationPreferencesSchema = z.object({

@@ -4,6 +4,7 @@ import { ArrowRight, ArrowDownToLine } from "lucide-react";
 import { DiscoverBooksCard } from "@/components/dashboard/discover-books-card";
 import { QuickOverview } from "@/components/dashboard/quick-overview";
 import { Card } from "@/components/ui/card";
+import { normalizeUserGender } from "@/lib/user-gender";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getAdminRecommendedBooks } from "@/server/admin/admin-service";
 import { getAvailableBonusFiles } from "@/server/bonus/bonus-service";
@@ -17,7 +18,7 @@ export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient();
 
   const [profileResult, unlockedBooks, availableBonus, childProfile, chatAccess, recommendedBooks] = await Promise.all([
-    supabase.from("profiles").select("display_name, full_name, email").eq("id", user.id).maybeSingle(),
+    supabase.from("profiles").select("display_name, full_name, email, gender").eq("id", user.id).maybeSingle(),
     getUserUnlockedBooks(user.id),
     getAvailableBonusFiles(user.id),
     getPrimaryChildProfile(user.id),
@@ -35,6 +36,7 @@ export default async function DashboardPage() {
     <div className="space-y-8">
       <QuickOverview
         userName={userName}
+        gender={normalizeUserGender(profileResult.data?.gender ?? user.user_metadata?.gender)}
         unlockedCount={unlockedBooks.length}
         bonusCount={availableBonus.length}
         hasChildProfile={Boolean(childProfile)}

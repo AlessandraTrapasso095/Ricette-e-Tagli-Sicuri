@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { registerSchema } from "@/lib/validation/forms";
 
 type RegisterValues = z.infer<typeof registerSchema>;
@@ -82,6 +83,22 @@ export function RegisterForm() {
         <Input id="register-email" type="email" placeholder="nome@email.it" {...form.register("email")} />
         {form.formState.errors.email ? (
           <p className="text-xs text-red-600">{form.formState.errors.email.message}</p>
+        ) : null}
+      </div>
+
+      <div className="space-y-1">
+        <label htmlFor="register-gender" className="text-sm font-medium text-zinc-700">
+          Genere
+        </label>
+        <Select id="register-gender" defaultValue="" {...form.register("gender")}>
+          <option value="" disabled>
+            Seleziona maschio o femmina
+          </option>
+          <option value="femmina">Femmina</option>
+          <option value="maschio">Maschio</option>
+        </Select>
+        {form.formState.errors.gender ? (
+          <p className="text-xs text-red-600">{form.formState.errors.gender.message}</p>
         ) : null}
       </div>
 

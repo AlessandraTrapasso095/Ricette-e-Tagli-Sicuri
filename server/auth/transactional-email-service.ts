@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getEnv } from "@/lib/env";
+import { getWelcomeEmailSubject, getWelcomeParticiple, type OptionalUserGender } from "@/lib/user-gender";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { escapeHtml } from "@/lib/utils";
 import { sendTransactionalEmail } from "@/server/email/transactional-sender";
@@ -91,6 +92,7 @@ function emailLayout({
 export async function sendSignupVerificationEmail(params: {
   email: string;
   fullName?: string | null;
+  gender?: OptionalUserGender;
   confirmLink: string;
 }) {
   const readerFacingName = await getReaderFacingName();
@@ -127,6 +129,7 @@ export async function sendWelcomeEmailOnce(params: {
   userId: string;
   email: string;
   fullName?: string | null;
+  gender?: OptionalUserGender;
   dashboardUrl: string;
 }) {
   const readerFacingName = await getReaderFacingName();
@@ -143,10 +146,11 @@ export async function sendWelcomeEmailOnce(params: {
   }
 
   const name = safeText(sanitizeName(params.fullName));
+  const welcomeWord = getWelcomeParticiple(params.gender ?? null);
   const body = `
     <p style="margin:0 0 12px;">Ciao ${name},</p>
     <p style="margin:0 0 12px;">
-      benvenuta/o nella tua Area Lettori di Ricette e Tagli Sicuri.
+      ${welcomeWord} nella tua Area Lettori di Ricette e Tagli Sicuri.
     </p>
     <p style="margin:0;">
       Ora puoi entrare nella dashboard, sbloccare i tuoi libri e accedere ai bonus dedicati.
@@ -155,7 +159,7 @@ export async function sendWelcomeEmailOnce(params: {
 
   await sendTransactionalEmail({
     to: params.email,
-    subject: "Benvenuta/o nell'Area Lettori - Ricette e Tagli Sicuri",
+    subject: getWelcomeEmailSubject(params.gender ?? null),
     html: emailLayout({
       title: "Account attivato con successo",
       body,

@@ -25,6 +25,7 @@ export async function PATCH(request: Request) {
       .update({
         full_name: parsed.data.fullName.trim(),
         display_name: parsed.data.displayName.trim(),
+        gender: parsed.data.gender,
       })
       .eq("id", user.id);
 
@@ -36,6 +37,7 @@ export async function PATCH(request: Request) {
       data: {
         fullName: parsed.data.fullName.trim(),
         displayName: parsed.data.displayName.trim(),
+        gender: parsed.data.gender,
       },
     });
   } catch (error) {
