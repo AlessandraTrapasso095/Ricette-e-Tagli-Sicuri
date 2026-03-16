@@ -27,6 +27,7 @@ export function RegisterForm() {
       password: "",
       confirmPassword: "",
       fullName: "",
+      gender: "femmina",
     },
   });
 
@@ -52,8 +53,8 @@ export function RegisterForm() {
 
       setSuccessMessage(
         json.data?.usedFallbackEmail
-          ? "Registrazione completata. Controlla la tua email per verificare l'account."
-          : "Registrazione completata. Ti abbiamo inviato un'email di conferma.",
+          ? "Registrazione completata. Controlla la tua email per verificare l'account. Controlla anche nello spam."
+          : "Registrazione completata. Ti abbiamo inviato un'email di conferma. Controlla anche nello spam.",
       );
       form.reset();
     } catch (error) {
