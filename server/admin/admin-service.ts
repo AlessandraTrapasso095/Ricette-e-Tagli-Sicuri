@@ -3,11 +3,9 @@ import "server-only";
 import { differenceInMonths } from "date-fns";
 
 import { AUTH_INACTIVITY_TIMEOUT_MS } from "@/config/auth";
-import { MENU_SESSION_RESET_TIMEZONE } from "@/config/chat-session";
 import { READER_BOOK_RECOMMENDATIONS, type RecommendedBook } from "@/config/recommended-books";
 import { normalizeBookAnswer } from "@/lib/text/normalize-answer";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getStartOfDayInTimeZone } from "@/lib/timezone/day-boundary";
 
 type FeedingStyle = "classico" | "autosvezzamento" | "misto";
 
@@ -774,13 +772,12 @@ export async function resetAdminUserMenuChat(params: {
   userId: string;
 }) {
   const admin = createSupabaseAdminClient();
-  const dayStartIso = getStartOfDayInTimeZone(new Date(), MENU_SESSION_RESET_TIMEZONE).toISOString();
 
   const { data: sessions, error: sessionsError } = await admin
     .from("menu_sessions")
     .select("id")
     .eq("user_id", params.userId)
-    .gte("created_at", dayStartIso);
+    .eq("is_archived", false);
 
   if (sessionsError) {
     throw new Error("Impossibile leggere le sessioni chat dell'utente.");
@@ -792,21 +789,19 @@ export async function resetAdminUserMenuChat(params: {
     .from("menu_sessions")
     .update({ is_archived: true })
     .eq("user_id", params.userId)
-    .eq("is_archived", false)
-    .gte("created_at", dayStartIso);
+    .eq("is_archived", false);
 
   if (archiveError) {
-    throw new Error("Impossibile archiviare le sessioni chat di oggi.");
+    throw new Error("Impossibile archiviare le sessioni chat dell'utente.");
   }
 
   const { error: deleteMessagesError } = await admin
     .from("menu_messages")
     .delete()
-    .eq("user_id", params.userId)
-    .gte("created_at", dayStartIso);
+    .eq("user_id", params.userId);
 
   if (deleteMessagesError) {
-    throw new Error("Impossibile resettare i messaggi chat di oggi.");
+    throw new Error("Impossibile resettare i messaggi chat dell'utente.");
   }
 
   await admin.from("audit_logs").insert({
@@ -815,7 +810,6 @@ export async function resetAdminUserMenuChat(params: {
     entity_id: params.userId,
     action: "menu_chat_reset",
     details: {
-      resetFromDayStart: dayStartIso,
       archivedSessionIds: sessionIds,
       archivedSessionsCount: sessionIds.length,
     },
@@ -823,7 +817,6 @@ export async function resetAdminUserMenuChat(params: {
 
   return {
     archivedSessionsCount: sessionIds.length,
-    resetFromDayStart: dayStartIso,
   };
 }
 

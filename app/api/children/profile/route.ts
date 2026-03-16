@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { childProfileSchema } from "@/lib/validation/forms";
 import { getApiUserOrResponse } from "@/server/auth/api-auth";
-import { getPrimaryChildProfile, savePrimaryChildProfile } from "@/server/children/child-service";
+import { deleteChildProfiles, getPrimaryChildProfile, savePrimaryChildProfile } from "@/server/children/child-service";
 
 export async function GET() {
   const { user, unauthorizedResponse } = await getApiUserOrResponse({ requireDisclaimer: true });
@@ -41,4 +41,14 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({ data: saved });
+}
+
+export async function DELETE() {
+  const { user, unauthorizedResponse } = await getApiUserOrResponse({ requireDisclaimer: true });
+  if (!user) {
+    return unauthorizedResponse;
+  }
+
+  await deleteChildProfiles(user.id);
+  return NextResponse.json({ success: true });
 }

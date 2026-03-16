@@ -162,19 +162,19 @@ export function ChatMenuPanel() {
   const showSafeCutsDisclaimer =
     latestMenu?.childProfileSummary.weaningType === "autosvezzamento" || latestMenu?.childProfileSummary.weaningType === "misto";
 
-  const hasGeneratedToday = sessions.length > 0 || generated !== null;
-  const canSubmit = prompt.trim().length >= 2 && (!hasGeneratedToday || Boolean(activeSessionId));
-  const textareaPlaceholder = hasGeneratedToday ? MODIFY_CHAT_PLACEHOLDER : DEFAULT_CHAT_PROMPT;
+  const hasGeneratedMenu = sessions.length > 0 || generated !== null;
+  const canSubmit = prompt.trim().length >= 2 && (!hasGeneratedMenu || Boolean(activeSessionId));
+  const textareaPlaceholder = hasGeneratedMenu ? MODIFY_CHAT_PLACEHOLDER : DEFAULT_CHAT_PROMPT;
 
   useEffect(() => {
-    if (!hasGeneratedToday) {
+    if (!hasGeneratedMenu) {
       return;
     }
 
     if (prompt.trim().toLowerCase() === DEFAULT_CHAT_PROMPT.toLowerCase()) {
       setPrompt("");
     }
-  }, [hasGeneratedToday, prompt]);
+  }, [hasGeneratedMenu, prompt]);
 
   async function submitPrompt(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -182,7 +182,7 @@ export function ChatMenuPanel() {
     setStatusMessage(null);
 
     try {
-      const isModificationRequest = Boolean(activeSessionId && hasGeneratedToday);
+      const isModificationRequest = Boolean(activeSessionId && hasGeneratedMenu);
       const requestPayload = {
         prompt,
         saveMenu: false,
@@ -291,7 +291,7 @@ export function ChatMenuPanel() {
           />
           <div className="grid gap-3 sm:flex sm:flex-wrap">
             <Button className="w-full sm:w-auto" type="submit" disabled={loading || !canSubmit}>
-              {loading ? (hasGeneratedToday ? "Modifica in corso..." : "Generazione menu...") : hasGeneratedToday ? "Modifica menu" : "Genera menu"}
+              {loading ? (hasGeneratedMenu ? "Modifica in corso..." : "Generazione menu...") : hasGeneratedMenu ? "Modifica menu" : "Genera menu"}
             </Button>
             <Button
               type="button"
@@ -312,7 +312,7 @@ export function ChatMenuPanel() {
         <CardTitle>Sessioni Chat</CardTitle>
         <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
           {sessions.length === 0 ? (
-            <p className="text-sm text-zinc-500">Nessuna sessione disponibile oggi.</p>
+            <p className="text-sm text-zinc-500">Nessuna sessione disponibile.</p>
           ) : (
             sessions.slice(0, MENU_SESSION_PANEL_VISIBLE_ITEMS).map((session, index) => (
               <button

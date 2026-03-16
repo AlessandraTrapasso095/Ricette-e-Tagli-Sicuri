@@ -4,7 +4,7 @@ import OpenAI from "openai";
 import { subDays } from "date-fns";
 
 import { businessRulesConfig } from "@/config/business-rules";
-import { MENU_DAILY_MAX_ATTEMPTS, MENU_SESSION_RESET_TIMEZONE } from "@/config/chat-session";
+import { MENU_SESSION_RESET_TIMEZONE } from "@/config/chat-session";
 import { getEnv } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getStartOfDayInTimeZone } from "@/lib/timezone/day-boundary";
@@ -73,14 +73,6 @@ function getMenuDayStartIso() {
   return getStartOfDayInTimeZone(new Date(), MENU_SESSION_RESET_TIMEZONE).toISOString();
 }
 
-function buildDailyAttemptLimitMessage() {
-  if (MENU_DAILY_MAX_ATTEMPTS === null) {
-    return "Limite giornaliero disattivato.";
-  }
-
-  return `Hai raggiunto il limite di ${MENU_DAILY_MAX_ATTEMPTS} tentativi giornalieri. Potrai riprovare dopo la mezzanotte.`;
-}
-
 async function archiveExpiredDailySessions(admin: AdminClient, userId: string, dayStartIso: string) {
   const { error } = await admin
     .from("menu_sessions")
@@ -94,46 +86,24 @@ async function archiveExpiredDailySessions(admin: AdminClient, userId: string, d
   }
 }
 
-async function assertDailyAttemptLimit(params: {
-  admin: AdminClient;
-  userId: string;
-  dayStartIso: string;
-}) {
-  if (MENU_DAILY_MAX_ATTEMPTS === null) {
-    return;
-  }
-
-  const { count, error } = await params.admin
-    .from("menu_messages")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", params.userId)
-    .eq("role", "assistant")
-    .not("menu_payload", "is", null)
-    .gte("created_at", params.dayStartIso);
-
-  if (error) {
-    throw new Error("Impossibile verificare i tentativi giornalieri.");
-  }
-
-  if ((count ?? 0) >= MENU_DAILY_MAX_ATTEMPTS) {
-    throw new Error(buildDailyAttemptLimitMessage());
-  }
-}
-
-async function ensureSessionIsAvailableToday(params: {
+async function ensureSessionBelongsToUser(params: {
   admin: AdminClient;
   userId: string;
   sessionId: string;
-  dayStartIso: string;
+  dayStartIso?: string;
 }) {
-  const { data: session, error } = await params.admin
+  let query = params.admin
     .from("menu_sessions")
     .select("id")
     .eq("id", params.sessionId)
     .eq("user_id", params.userId)
-    .eq("is_archived", false)
-    .gte("created_at", params.dayStartIso)
-    .maybeSingle();
+    .eq("is_archived", false);
+
+  if (params.dayStartIso) {
+    query = query.gte("created_at", params.dayStartIso);
+  }
+
+  const { data: session, error } = await query.maybeSingle();
 
   if (error || !session) {
     throw new Error("Sessione non disponibile: genera un nuovo menu per oggi.");
@@ -1343,13 +1313,16 @@ async function generateDailyMenuWithOpenAI(params: {
       deterministicIssues.push("Il menu deve includere esattamente colazione, pranzo, merenda e cena.");
     }
 
-    const deterministicValidation = validateDailyMenu(deterministicMenu, params.policy);
-    if (!deterministicValidation.isValid) {
-      deterministicIssues.push(...deterministicValidation.issues);
-    }
     deterministicIssues.push(...evaluateForcedAdjustments(deterministicMenu, params.previousMenu, params.forcedAdjustments));
 
     if (!isSameMenuAsPrevious(deterministicMenu, params.previousMenu) && deterministicIssues.length === 0) {
+      return deterministicMenu;
+    }
+
+    const deterministicValidation = validateDailyMenu(deterministicMenu, params.policy);
+    const blockingIssues = deterministicValidation.issues.filter((issue) => issue.includes("vietato/escluso"));
+
+    if (!isSameMenuAsPrevious(deterministicMenu, params.previousMenu) && blockingIssues.length === 0) {
       return deterministicMenu;
     }
   }
@@ -1493,7 +1466,8 @@ export async function getSessionMessages(userId: string, sessionId: string) {
   const dayStartIso = getMenuDayStartIso();
 
   await archiveExpiredDailySessions(admin, userId, dayStartIso);
-  await ensureSessionIsAvailableToday({
+
+  await ensureSessionBelongsToUser({
     admin,
     userId,
     sessionId,
@@ -1526,11 +1500,6 @@ export async function generateMenuFromPrompt(params: {
   const dayStartIso = getMenuDayStartIso();
 
   await archiveExpiredDailySessions(admin, params.userId, dayStartIso);
-  await assertDailyAttemptLimit({
-    admin,
-    userId: params.userId,
-    dayStartIso,
-  });
 
   if (params.sessionId && params.sourceSessionId) {
     throw new Error("Richiesta non valida: usa sessionId oppure sourceSessionId.");
@@ -1546,7 +1515,7 @@ export async function generateMenuFromPrompt(params: {
   let previousMenuForModification: DailyMenuSchema | undefined;
 
   if (params.sourceSessionId) {
-    await ensureSessionIsAvailableToday({
+    await ensureSessionBelongsToUser({
       admin,
       userId: params.userId,
       sessionId: params.sourceSessionId,
@@ -1570,8 +1539,12 @@ export async function generateMenuFromPrompt(params: {
   }
 
   let sessionId = params.sessionId;
+  if (!sessionId && params.sourceSessionId) {
+    sessionId = params.sourceSessionId;
+  }
+
   if (sessionId) {
-    await ensureSessionIsAvailableToday({
+    await ensureSessionBelongsToUser({
       admin,
       userId: params.userId,
       sessionId,

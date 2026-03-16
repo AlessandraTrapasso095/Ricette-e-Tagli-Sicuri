@@ -85,3 +85,13 @@ export async function savePrimaryChildProfile(params: {
 
   return normalizeChildProfile(data as ChildProfile);
 }
+
+export async function deleteChildProfiles(userId: string) {
+  const admin = createSupabaseAdminClient();
+
+  const { error } = await admin.from("children").delete().eq("user_id", userId);
+
+  if (error) {
+    throw error;
+  }
+}

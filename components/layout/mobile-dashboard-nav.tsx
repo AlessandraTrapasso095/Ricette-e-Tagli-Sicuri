@@ -51,24 +51,29 @@ export function MobileDashboardNav() {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-rose-100 bg-white/96 shadow-[0_-12px_30px_rgba(15,23,42,0.08)] backdrop-blur sm:hidden">
       <div className="overflow-x-auto px-3 py-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="flex min-w-max items-stretch gap-2">
+        <div className="flex min-w-max items-stretch gap-1">
           {normalizedItems.map((item) => {
             const isActive = activeHref === item.href;
             const Icon = iconMap[item.href as keyof typeof iconMap];
+            const isLongLabel = item.label.length > 9;
 
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                style={{
+                  width: isLongLabel ? "4.8rem" : "calc((100vw - 4.4rem) / 5)",
+                  minWidth: isLongLabel ? "4.8rem" : "3.9rem",
+                }}
                 className={cn(
-                  "flex min-w-[4.35rem] shrink-0 snap-start flex-col items-center justify-center gap-1 rounded-2xl px-3 py-2 text-center text-[0.68rem] font-semibold transition-colors",
+                  "flex shrink-0 snap-start flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-center text-[0.64rem] font-semibold transition-colors",
                   isActive
                     ? "bg-rose-100 text-rose-800"
                     : "bg-white text-zinc-500 hover:bg-rose-50 hover:text-rose-700",
                 )}
               >
-                <Icon className="h-[1.05rem] w-[1.05rem]" strokeWidth={2.2} />
-                <span className="leading-tight">{item.label}</span>
+                <Icon className="h-4 w-4" strokeWidth={2.2} />
+                <span className="whitespace-normal leading-[1.05] [word-break:keep-all]">{item.label}</span>
               </Link>
             );
           })}
