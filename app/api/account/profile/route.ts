@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { accountProfileSettingsSchema } from "@/lib/validation/forms";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getApiUserOrResponse } from "@/server/auth/api-auth";
+import { updateProfileSettings } from "@/server/account/profile-settings-service";
 
 export async function PATCH(request: Request) {
   try {
@@ -18,26 +18,19 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Input non valido." }, { status: 400 });
     }
 
-    const supabase = await createSupabaseServerClient();
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        full_name: parsed.data.fullName.trim(),
-        display_name: parsed.data.displayName.trim(),
-        gender: parsed.data.gender,
-      })
-      .eq("id", user.id);
-
-    if (error) {
-      throw error;
-    }
+    const result = await updateProfileSettings({
+      userId: user.id,
+      fullName: parsed.data.fullName,
+      displayName: parsed.data.displayName,
+      gender: parsed.data.gender,
+    });
 
     return NextResponse.json({
       data: {
-        fullName: parsed.data.fullName.trim(),
-        displayName: parsed.data.displayName.trim(),
-        gender: parsed.data.gender,
+        fullName: result.fullName,
+        displayName: result.displayName,
+        gender: result.gender,
+        warning: result.warning,
       },
     });
   } catch (error) {

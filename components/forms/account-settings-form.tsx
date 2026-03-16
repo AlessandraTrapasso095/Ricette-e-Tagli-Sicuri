@@ -82,7 +82,7 @@ export function AccountSettingsForm({
       setFullName(json.data?.fullName ?? fullName);
       setDisplayName(json.data?.displayName ?? displayName);
       setGender(json.data?.gender ?? gender);
-      setProfileStatus("Profilo aggiornato correttamente.");
+      setProfileStatus(json.data?.warning ?? "Profilo aggiornato correttamente.");
     } catch (error) {
       setProfileStatus(error instanceof Error ? error.message : "Aggiornamento profilo non riuscito.");
     } finally {
