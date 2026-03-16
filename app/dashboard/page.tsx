@@ -30,7 +30,7 @@ export default async function DashboardPage() {
     profileResult.data?.display_name ??
     profileResult.data?.full_name ??
     (typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : null) ??
-    "Lettore";
+    "Utente";
 
   return (
     <div className="space-y-8">

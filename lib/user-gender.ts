@@ -21,7 +21,7 @@ export function getWelcomeParticiple(gender: OptionalUserGender) {
     return "benvenuta";
   }
 
-  return "benvenuta/o";
+  return null;
 }
 
 export function getCapitalizedWelcomeParticiple(gender: OptionalUserGender) {
@@ -33,13 +33,22 @@ export function getCapitalizedWelcomeParticiple(gender: OptionalUserGender) {
     return "Benvenuta";
   }
 
-  return "Benvenuta/o";
+  return null;
 }
 
 export function getDashboardWelcome(gender: OptionalUserGender) {
-  return `${getWelcomeParticiple(gender)} nell'Area Lettori`;
+  const welcome = getWelcomeParticiple(gender);
+  return welcome ? `${welcome} nell'Area Lettori` : "questa è la tua Area Lettori";
 }
 
 export function getWelcomeEmailSubject(gender: OptionalUserGender) {
-  return `${getCapitalizedWelcomeParticiple(gender)} nell'Area Lettori - Ricette e Tagli Sicuri`;
+  const welcome = getCapitalizedWelcomeParticiple(gender);
+  return welcome ? `${welcome} nell'Area Lettori - Ricette e Tagli Sicuri` : "Area Lettori - Ricette e Tagli Sicuri";
+}
+
+export function getWelcomeEmailSentence(gender: OptionalUserGender) {
+  const welcome = getWelcomeParticiple(gender);
+  return welcome
+    ? `${welcome} nella tua Area Lettori di Ricette e Tagli Sicuri.`
+    : "Ora hai accesso alla tua Area Lettori di Ricette e Tagli Sicuri.";
 }

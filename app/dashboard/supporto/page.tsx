@@ -19,7 +19,7 @@ export default async function DashboardSupportoPage() {
     getUserSupportAccessStatus(user.id),
   ]);
 
-  const userName = profileResult.data?.display_name ?? profileResult.data?.full_name ?? "Lettore";
+  const userName = profileResult.data?.display_name ?? profileResult.data?.full_name ?? "Utente";
   const userEmail = profileResult.data?.email ?? user.email ?? "";
 
   if (!supportAccess.hasAccess) {

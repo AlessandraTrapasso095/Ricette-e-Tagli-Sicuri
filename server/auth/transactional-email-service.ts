@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getEnv } from "@/lib/env";
-import { getWelcomeEmailSubject, getWelcomeParticiple, type OptionalUserGender } from "@/lib/user-gender";
+import { getWelcomeEmailSentence, getWelcomeEmailSubject, type OptionalUserGender } from "@/lib/user-gender";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { escapeHtml } from "@/lib/utils";
 import { sendTransactionalEmail } from "@/server/email/transactional-sender";
@@ -146,11 +146,11 @@ export async function sendWelcomeEmailOnce(params: {
   }
 
   const name = safeText(sanitizeName(params.fullName));
-  const welcomeWord = getWelcomeParticiple(params.gender ?? null);
+  const welcomeSentence = getWelcomeEmailSentence(params.gender ?? null);
   const body = `
     <p style="margin:0 0 12px;">Ciao ${name},</p>
     <p style="margin:0 0 12px;">
-      ${welcomeWord} nella tua Area Lettori di Ricette e Tagli Sicuri.
+      ${welcomeSentence}
     </p>
     <p style="margin:0;">
       Ora puoi entrare nella dashboard, sbloccare i tuoi libri e accedere ai bonus dedicati.
