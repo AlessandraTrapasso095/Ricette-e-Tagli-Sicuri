@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { MobileDashboardNav } from "@/components/layout/mobile-dashboard-nav";
 import { BackNavButton } from "@/components/ui/back-nav-button";
 
 import { DashboardFooter } from "./dashboard-footer";
@@ -53,11 +54,12 @@ export function DashboardShell({ children, rightTop }: DashboardShellProps) {
         </main>
       </div>
       <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:hidden">
-        <main className="space-y-8">
+        <main className="space-y-8 pb-24">
           {children}
         </main>
       </div>
       <DashboardFooter />
+      <MobileDashboardNav />
     </div>
   );
 }

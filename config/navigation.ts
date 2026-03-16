@@ -15,6 +15,16 @@ export const dashboardNavigation = [
   { href: "/dashboard/impostazioni", label: "Impostazioni" },
 ];
 
+export const mobileDashboardNavigation = [
+  { href: "/dashboard", label: "Home" },
+  { href: "/dashboard/chat-menu", label: "Menu" },
+  { href: "/dashboard/libri", label: "Libri" },
+  { href: "/dashboard/bonus", label: "Bonus" },
+  { href: "/dashboard/profilo-bambino", label: "Bambino" },
+  { href: "/dashboard/supporto", label: "Supporto" },
+  { href: "/dashboard/impostazioni", label: "Impostazioni" },
+];
+
 export const adminNavigation = [
   { href: "/admin", label: "Overview" },
   { href: "/admin/libri", label: "Libri" },

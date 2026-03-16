@@ -20,38 +20,38 @@ export function QuickOverview({ userName, unlockedCount, bonusCount, hasChildPro
         <CardDescription className="mx-auto mt-6 max-w-[20rem] text-[0.98rem] leading-[1.65] text-zinc-500 sm:mx-0 sm:mt-3 sm:max-w-none sm:text-base sm:leading-relaxed">
           Da qui gestisci i tuoi libri sbloccati, i bonus PDF e i menu giornalieri personalizzati.
         </CardDescription>
-        <div className="mt-8 flex flex-col gap-4 sm:mt-6 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="mt-8 hidden sm:flex sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
           {hasChatAccess ? (
             <Link
               href="/dashboard/chat-menu"
-              className="rounded-[1.45rem] bg-rose-500 px-4 py-4 text-center text-[1.05rem] font-bold text-white transition hover:bg-rose-600 sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
+              className="rounded-2xl bg-rose-500 px-5 py-3 text-center text-sm font-bold text-white transition hover:bg-rose-600"
             >
               Cosa mangiamo oggi?
             </Link>
           ) : (
             <Link
               href="/dashboard/libri"
-              className="rounded-[1.45rem] bg-amber-100 px-4 py-4 text-center text-[1.05rem] font-bold text-amber-900 transition hover:bg-amber-200 sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
+              className="rounded-2xl bg-amber-100 px-5 py-3 text-center text-sm font-bold text-amber-900 transition hover:bg-amber-200"
             >
               Sblocca un libro per attivare la chat
             </Link>
           )}
           <Link
             href="/dashboard/libri"
-            className="rounded-[1.45rem] bg-rose-50 px-4 py-4 text-center text-[1.05rem] font-bold text-rose-900 transition hover:bg-rose-100 sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
+            className="rounded-2xl bg-rose-50 px-5 py-3 text-center text-sm font-bold text-rose-900 transition hover:bg-rose-100"
           >
             Sblocca un altro libro
           </Link>
-          <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
+          <div className="flex flex-wrap gap-4">
             <Link
               href="/dashboard/supporto"
-              className="rounded-[1.35rem] bg-white px-4 py-3.5 text-center text-[0.98rem] font-semibold text-zinc-800 shadow-[0_8px_18px_rgba(15,23,42,0.06)] ring-1 ring-zinc-200 transition hover:bg-rose-50 hover:text-rose-800 sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm sm:shadow-sm"
+              className="rounded-2xl bg-white px-5 py-3 text-center text-sm font-semibold text-zinc-800 shadow-sm ring-1 ring-zinc-200 transition hover:bg-rose-50 hover:text-rose-800"
             >
               Chiedi Supporto
             </Link>
             <Link
               href="/dashboard/impostazioni"
-              className="rounded-[1.35rem] bg-zinc-100 px-4 py-3.5 text-center text-[0.98rem] font-semibold text-zinc-800 transition hover:bg-zinc-200 sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
+              className="rounded-2xl bg-zinc-100 px-5 py-3 text-center text-sm font-semibold text-zinc-800 transition hover:bg-zinc-200"
             >
               Impostazioni
             </Link>
@@ -59,23 +59,23 @@ export function QuickOverview({ userName, unlockedCount, bonusCount, hasChildPro
         </div>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
         <Link href="/dashboard/libri" className="block">
-          <Card className="flex min-h-[10.75rem] flex-col items-center justify-center text-center shadow-[0_14px_34px_rgba(236,72,153,0.07)] transition hover:-translate-y-0.5 hover:border-rose-200 hover:shadow-[0_14px_35px_rgba(236,72,153,0.12)] sm:min-h-[128px] sm:items-start sm:justify-start sm:text-left sm:shadow-[0_10px_35px_rgba(236,72,153,0.08)]">
-            <CardTitle className="text-[3.15rem] leading-none sm:text-3xl">{unlockedCount}</CardTitle>
-            <CardDescription className="mt-4 text-[0.98rem] font-medium sm:mt-2 sm:text-base">Libri sbloccati</CardDescription>
+          <Card className="flex min-h-[6.75rem] flex-col items-center justify-center px-3 py-4 text-center shadow-[0_14px_34px_rgba(236,72,153,0.07)] transition hover:-translate-y-0.5 hover:border-rose-200 hover:shadow-[0_14px_35px_rgba(236,72,153,0.12)] sm:min-h-[128px] sm:items-start sm:justify-start sm:px-6 sm:py-6 sm:text-left sm:shadow-[0_10px_35px_rgba(236,72,153,0.08)]">
+            <CardTitle className="text-[2rem] leading-none sm:text-3xl">{unlockedCount}</CardTitle>
+            <CardDescription className="mt-2 text-[0.78rem] font-medium leading-tight sm:mt-2 sm:text-base">Libri sbloccati</CardDescription>
           </Card>
         </Link>
         <Link href="/dashboard/bonus" className="block">
-          <Card className="flex min-h-[10.75rem] flex-col items-center justify-center text-center shadow-[0_14px_34px_rgba(236,72,153,0.07)] transition hover:-translate-y-0.5 hover:border-rose-200 hover:shadow-[0_14px_35px_rgba(236,72,153,0.12)] sm:min-h-[128px] sm:items-start sm:justify-start sm:text-left sm:shadow-[0_10px_35px_rgba(236,72,153,0.08)]">
-            <CardTitle className="text-[3.15rem] leading-none sm:text-3xl">{bonusCount}</CardTitle>
-            <CardDescription className="mt-4 text-[0.98rem] font-medium sm:mt-2 sm:text-base">Bonus disponibili</CardDescription>
+          <Card className="flex min-h-[6.75rem] flex-col items-center justify-center px-3 py-4 text-center shadow-[0_14px_34px_rgba(236,72,153,0.07)] transition hover:-translate-y-0.5 hover:border-rose-200 hover:shadow-[0_14px_35px_rgba(236,72,153,0.12)] sm:min-h-[128px] sm:items-start sm:justify-start sm:px-6 sm:py-6 sm:text-left sm:shadow-[0_10px_35px_rgba(236,72,153,0.08)]">
+            <CardTitle className="text-[2rem] leading-none sm:text-3xl">{bonusCount}</CardTitle>
+            <CardDescription className="mt-2 text-[0.78rem] font-medium leading-tight sm:mt-2 sm:text-base">Bonus disponibili</CardDescription>
           </Card>
         </Link>
         <Link href="/dashboard/profilo-bambino" className="block">
-          <Card className="flex min-h-[10.75rem] flex-col items-center justify-center text-center shadow-[0_14px_34px_rgba(236,72,153,0.07)] transition hover:-translate-y-0.5 hover:border-rose-200 hover:shadow-[0_14px_35px_rgba(236,72,153,0.12)] sm:min-h-[128px] sm:items-start sm:justify-start sm:text-left sm:shadow-[0_10px_35px_rgba(236,72,153,0.08)]">
-            <CardTitle className="text-[2.55rem] leading-none sm:text-2xl">{hasChildProfile ? "Completo" : "Da compilare"}</CardTitle>
-            <CardDescription className="mt-4 text-[0.98rem] font-medium sm:mt-2 sm:text-base">Profilo bambino</CardDescription>
+          <Card className="flex min-h-[6.75rem] flex-col items-center justify-center px-3 py-4 text-center shadow-[0_14px_34px_rgba(236,72,153,0.07)] transition hover:-translate-y-0.5 hover:border-rose-200 hover:shadow-[0_14px_35px_rgba(236,72,153,0.12)] sm:min-h-[128px] sm:items-start sm:justify-start sm:px-6 sm:py-6 sm:text-left sm:shadow-[0_10px_35px_rgba(236,72,153,0.08)]">
+            <CardTitle className="text-[1.45rem] leading-none sm:text-2xl">{hasChildProfile ? "Completo" : "Da compilare"}</CardTitle>
+            <CardDescription className="mt-2 text-[0.78rem] font-medium leading-tight sm:mt-2 sm:text-base">Profilo bambino</CardDescription>
           </Card>
         </Link>
       </div>
