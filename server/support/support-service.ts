@@ -2,6 +2,7 @@ import "server-only";
 
 import { getEnv } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { escapeHtml, escapeHtmlWithLineBreaks } from "@/lib/utils";
 import { getUserNotificationPreferences } from "@/server/account/notification-preferences-service";
 import { resolveConfiguredAppBaseUrl } from "@/server/auth/auth-url";
 import { sendTransactionalEmail } from "@/server/email/transactional-sender";
@@ -302,6 +303,11 @@ export async function createSupportTicket(input: CreateSupportTicketInput) {
 
   const supportTarget = getEnv("SUPPORT_TARGET_EMAIL") ?? "supporto@ricetteetaglisicuri.it";
   const safeBookName = bookTitle ?? "Non specificato";
+  const safeName = escapeHtml(input.name);
+  const safeEmail = escapeHtml(input.email);
+  const safeCategory = escapeHtml(input.category);
+  const safeBookHtml = escapeHtml(safeBookName);
+  const safeMessage = escapeHtmlWithLineBreaks(input.message);
 
   try {
     await sendTransactionalEmail({
@@ -311,11 +317,11 @@ export async function createSupportTicket(input: CreateSupportTicketInput) {
       html: `
         <h2>Nuovo ticket supporto</h2>
         <p><strong>ID:</strong> ${ticket.id}</p>
-        <p><strong>Nome:</strong> ${input.name}</p>
-        <p><strong>Email:</strong> ${input.email}</p>
-        <p><strong>Categoria:</strong> ${input.category}</p>
-        <p><strong>Libro:</strong> ${safeBookName}</p>
-        <p><strong>Messaggio:</strong><br/>${input.message.replace(/\n/g, "<br/>")}</p>
+        <p><strong>Nome:</strong> ${safeName}</p>
+        <p><strong>Email:</strong> ${safeEmail}</p>
+        <p><strong>Categoria:</strong> ${safeCategory}</p>
+        <p><strong>Libro:</strong> ${safeBookHtml}</p>
+        <p><strong>Messaggio:</strong><br/>${safeMessage}</p>
       `,
     });
 
@@ -324,7 +330,7 @@ export async function createSupportTicket(input: CreateSupportTicketInput) {
       subject: "Abbiamo ricevuto la tua richiesta",
       html: `
         <h2>Richiesta ricevuta</h2>
-        <p>Ciao ${input.name},</p>
+        <p>Ciao ${safeName},</p>
         <p>abbiamo ricevuto la tua richiesta di supporto (${ticket.id}). Ti risponderemo il prima possibile.</p>
       `,
     });
@@ -505,14 +511,16 @@ export async function updateAdminSupportTicketStatus(params: {
   if (shouldNotifyUserByEmail && trimmedReply) {
     const appBaseUrl = resolveConfiguredAppBaseUrl();
     const supportUrl = appBaseUrl ? `${appBaseUrl}/dashboard/supporto` : null;
+    const safeReply = escapeHtmlWithLineBreaks(trimmedReply);
+    const safeName = escapeHtml(updated.name);
 
     await sendTransactionalEmail({
       to: updated.email,
       subject: "Risposta al tuo ticket - Ricette e Tagli Sicuri",
       html: `
         <h2>Abbiamo risposto alla tua richiesta</h2>
-        <p>Ciao ${updated.name},</p>
-        <p>${trimmedReply.replace(/\n/g, "<br/>")}</p>
+        <p>Ciao ${safeName},</p>
+        <p>${safeReply}</p>
         <p>Puoi visualizzare la risposta anche nella sezione Ticket della tua Area Lettori.</p>
         ${
           supportUrl
@@ -621,6 +629,9 @@ export async function replyToSupportTicket(input: ReplyToSupportTicketInput) {
   });
 
   const supportTarget = getEnv("SUPPORT_TARGET_EMAIL") ?? "supporto@ricetteetaglisicuri.it";
+  const safeName = escapeHtml(updated.name);
+  const safeEmail = escapeHtml(updated.email);
+  const safeMessage = escapeHtmlWithLineBreaks(trimmedMessage);
 
   try {
     await sendTransactionalEmail({
@@ -630,9 +641,9 @@ export async function replyToSupportTicket(input: ReplyToSupportTicketInput) {
       html: `
         <h2>Nuova risposta utente</h2>
         <p><strong>ID ticket:</strong> ${input.ticketId}</p>
-        <p><strong>Nome:</strong> ${updated.name}</p>
-        <p><strong>Email:</strong> ${updated.email}</p>
-        <p><strong>Messaggio:</strong><br/>${trimmedMessage.replace(/\n/g, "<br/>")}</p>
+        <p><strong>Nome:</strong> ${safeName}</p>
+        <p><strong>Email:</strong> ${safeEmail}</p>
+        <p><strong>Messaggio:</strong><br/>${safeMessage}</p>
       `,
     });
   } catch (error) {

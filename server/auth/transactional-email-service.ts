@@ -2,6 +2,7 @@ import "server-only";
 
 import { getEnv } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { escapeHtml } from "@/lib/utils";
 import { sendTransactionalEmail } from "@/server/email/transactional-sender";
 import { getReaderFacingName } from "@/server/settings/app-settings-service";
 
@@ -13,6 +14,10 @@ function sanitizeName(name?: string | null) {
 
   const [firstName] = clean.split(/\s+/);
   return firstName || "ciao";
+}
+
+function safeText(value?: string | null) {
+  return escapeHtml((value ?? "").trim());
 }
 
 function getLogoUrl() {
@@ -68,11 +73,11 @@ function emailLayout({
             }
             <td style="vertical-align:middle;">
               <p style="margin:0;font-size:17px;line-height:1.2;color:#881337;font-weight:700;">Ricette e Tagli Sicuri</p>
-              <p style="margin:2px 0 0;font-size:12px;line-height:1.2;color:#be185d;">di ${readerFacingName}</p>
+              <p style="margin:2px 0 0;font-size:12px;line-height:1.2;color:#be185d;">di ${safeText(readerFacingName)}</p>
             </td>
           </tr>
         </table>
-        <h1 style="margin:0 0 14px;font-size:24px;line-height:1.2;color:#881337;">${title}</h1>
+        <h1 style="margin:0 0 14px;font-size:24px;line-height:1.2;color:#881337;">${safeText(title)}</h1>
         <div style="font-size:15px;line-height:1.7;color:#3f3f46;">${body}</div>
         ${ctaHtml}
         <p style="margin:24px 0 0;font-size:12px;color:#71717a;">
@@ -89,7 +94,8 @@ export async function sendSignupVerificationEmail(params: {
   confirmLink: string;
 }) {
   const readerFacingName = await getReaderFacingName();
-  const name = sanitizeName(params.fullName);
+  const name = safeText(sanitizeName(params.fullName));
+  const safeReaderFacingName = safeText(readerFacingName);
   const body = `
     <p style="margin:0 0 12px;">Ciao ${name},</p>
     <p style="margin:0 0 12px;">
@@ -100,7 +106,7 @@ export async function sendSignupVerificationEmail(params: {
     </p>
     <p style="margin:0;">
       Ti aspetto in piattaforma, un abbraccio<br />
-      ${readerFacingName}
+      ${safeReaderFacingName}
     </p>
   `;
 
@@ -136,7 +142,7 @@ export async function sendWelcomeEmailOnce(params: {
     return { sent: false, reason: "already_sent" as const };
   }
 
-  const name = sanitizeName(params.fullName);
+  const name = safeText(sanitizeName(params.fullName));
   const body = `
     <p style="margin:0 0 12px;">Ciao ${name},</p>
     <p style="margin:0 0 12px;">

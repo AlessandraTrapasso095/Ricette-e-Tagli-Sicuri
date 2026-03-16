@@ -42,3 +42,16 @@ export function formatRelativeMinutes(minutes: number): string {
 
   return `${hours}h ${remainingMinutes}m`;
 }
+
+export function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export function escapeHtmlWithLineBreaks(value: string) {
+  return escapeHtml(value).replace(/\n/g, "<br/>");
+}

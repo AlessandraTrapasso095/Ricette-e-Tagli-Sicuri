@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { supportTicketSchema } from "@/lib/validation/forms";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getApiUserOrResponse } from "@/server/auth/api-auth";
 import { createSupportTicket, getUserSupportTickets } from "@/server/support/support-service";
 
@@ -27,10 +28,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Input non valido" }, { status: 400 });
   }
 
+  const supabase = await createSupabaseServerClient();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("email")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const verifiedEmail = user.email?.trim() || profile?.email?.trim();
+  if (!verifiedEmail) {
+    return NextResponse.json({ error: "Email account non disponibile." }, { status: 400 });
+  }
+
   const ticket = await createSupportTicket({
     userId: user.id,
     name: parsed.data.name,
-    email: parsed.data.email,
+    email: verifiedEmail,
     category: parsed.data.category,
     message: parsed.data.message,
     bookSlug: parsed.data.bookSlug,

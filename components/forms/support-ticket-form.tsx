@@ -84,7 +84,8 @@ export function SupportTicketForm({ userEmail, userName, books }: SupportTicketF
           </div>
           <div>
             <label className="text-sm font-medium text-zinc-700">Email</label>
-            <Input type="email" {...form.register("email")} />
+            <Input type="email" readOnly aria-readonly="true" className="bg-zinc-50 text-zinc-500" {...form.register("email")} />
+            <p className="mt-1 text-xs text-zinc-500">L&apos;email usata per il ticket e&apos; quella verificata del tuo account.</p>
           </div>
         </div>
 

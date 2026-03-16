@@ -30,7 +30,8 @@ export function ResetPasswordForm() {
 
     try {
       const supabase = createSupabaseBrowserClient();
-      const redirectTo = `${window.location.origin}/login`;
+      const publicAppUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://ricette-e-tagli-sicuri.vercel.app";
+      const redirectTo = `${publicAppUrl}/auth/reset-password`;
 
       const { error } = await supabase.auth.resetPasswordForEmail(values.email, {
         redirectTo,
