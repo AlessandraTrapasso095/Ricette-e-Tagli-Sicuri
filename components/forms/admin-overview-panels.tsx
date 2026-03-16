@@ -124,7 +124,7 @@ export function AdminOverviewPanels({
 
   return (
     <div className="flex min-h-[560px] flex-col gap-4 lg:h-[calc(100svh-2.5rem)]">
-      <div className="sticky top-0 z-20 rounded-3xl border border-zinc-200 bg-white/95 p-3 shadow-sm backdrop-blur">
+      <div className="sticky top-0 z-20 hidden rounded-3xl border border-zinc-200 bg-white/95 p-3 shadow-sm backdrop-blur lg:block">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {OVERVIEW_CARDS.map((card) => {
             const isActive = activeSection === card.key;

@@ -15,7 +15,7 @@ export function AdminBroadcastPanel({ initialHistory }: AdminBroadcastPanelProps
   const [history, setHistory] = useState(initialHistory);
 
   return (
-    <div className="mt-4 space-y-6">
+    <div className="mt-3 space-y-5 sm:mt-4 sm:space-y-6">
       <AdminBroadcastForm
         onSent={(entry) => {
           if (!entry) {
@@ -26,10 +26,12 @@ export function AdminBroadcastPanel({ initialHistory }: AdminBroadcastPanelProps
         }}
       />
 
-      <div className="border-t border-zinc-200 pt-6">
+      <div className="border-t border-zinc-200 pt-5 sm:pt-6">
         <div className="mb-4">
-          <h3 className="text-lg font-semibold text-rose-900">Storico comunicazioni</h3>
-          <p className="mt-1 text-sm text-zinc-600">Elenco delle comunicazioni inviate in precedenza agli utenti.</p>
+          <h3 className="text-base font-semibold text-rose-900 sm:text-lg">Storico comunicazioni</h3>
+          <p className="mt-1 text-sm leading-6 text-zinc-600">
+            Elenco delle comunicazioni inviate in precedenza agli utenti.
+          </p>
         </div>
         <AdminBroadcastHistory history={history} />
       </div>

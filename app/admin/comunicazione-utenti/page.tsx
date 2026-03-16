@@ -6,9 +6,9 @@ export default async function AdminComunicazioneUtentiPage() {
   const history = await getBroadcastHistory();
 
   return (
-    <Card>
-      <CardTitle>Comunicazione Utenti</CardTitle>
-      <CardDescription>
+    <Card className="p-4 sm:p-6">
+      <CardTitle className="text-lg sm:text-xl">Comunicazione Utenti</CardTitle>
+      <CardDescription className="max-w-2xl leading-6 sm:text-sm">
         Invia avvisi e novità a tutti gli utenti registrati (sconti, nuove uscite, aggiornamenti importanti).
       </CardDescription>
       <AdminBroadcastPanel initialHistory={history} />

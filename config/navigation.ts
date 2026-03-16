@@ -35,3 +35,12 @@ export const adminNavigation = [
   { href: "/admin/comunicazione-utenti", label: "Comunicazione Utenti" },
   { href: "/admin/impostazioni", label: "Impostazioni" },
 ];
+
+export const mobileAdminNavigation = [
+  { href: "/admin/utenti", label: "Utenti" },
+  { href: "/admin/libri-sbloccati", label: "Libri" },
+  { href: "/admin/accessi-attivi", label: "Accessi" },
+  { href: "/admin/ticket", label: "Ticket" },
+  { href: "/admin/comunicazione-utenti", label: "Avvisi" },
+  { href: "/admin/impostazioni", label: "Impostazioni" },
+];

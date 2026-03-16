@@ -29,19 +29,26 @@ export function AdminBroadcastHistory({ history }: AdminBroadcastHistoryProps) {
           <div key={item.id} className="rounded-2xl border border-zinc-200">
             <button
               type="button"
-              className="flex w-full flex-wrap items-start justify-between gap-3 p-4 text-left"
+              className="flex w-full flex-col gap-3 p-4 text-left sm:flex-row sm:items-start sm:justify-between"
               onClick={() => setOpenItemId((current) => (current === item.id ? null : item.id))}
             >
-              <div>
-                <p className="text-base font-semibold text-zinc-900">{item.subject}</p>
-                <p className="mt-1 text-sm text-zinc-500">
-                  Inviata il {new Date(item.sentAt).toLocaleString("it-IT")} • {item.recipients} destinatari
-                </p>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold leading-6 text-zinc-900 sm:text-base">{item.subject}</p>
+                <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-zinc-500 sm:text-sm">
+                  <span>Inviata il {new Date(item.sentAt).toLocaleString("it-IT")}</span>
+                  <span className="hidden sm:inline">•</span>
+                  <span>{item.recipients} destinatari</span>
+                </div>
                 <p className="mt-2 text-xs font-medium uppercase tracking-wide text-rose-700">
                   {isOpen ? "Nascondi contenuto" : "Apri contenuto"}
                 </p>
               </div>
-              <Badge variant={item.category === "promotions" ? "warning" : "neutral"}>{item.categoryLabel}</Badge>
+              <Badge
+                variant={item.category === "promotions" ? "warning" : "neutral"}
+                className="self-start whitespace-nowrap"
+              >
+                {item.categoryLabel}
+              </Badge>
             </button>
 
             {isOpen ? (

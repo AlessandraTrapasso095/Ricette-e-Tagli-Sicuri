@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
@@ -78,6 +79,7 @@ const STATUS_BADGE_STYLES: Record<SupportTicketStatus, string> = {
 
 export function AdminSupportTicketsTable({ initialTickets }: AdminSupportTicketsTableProps) {
   const [tickets, setTickets] = useState(initialTickets);
+  const [expandedTicketId, setExpandedTicketId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [query, setQuery] = useState("");
@@ -282,11 +284,11 @@ export function AdminSupportTicketsTable({ initialTickets }: AdminSupportTickets
   }
 
   return (
-    <Card>
-      <CardTitle>Ticket supporto</CardTitle>
-      <CardDescription>Filtra i ticket e aggiorna lo stato operativo.</CardDescription>
+    <Card className="p-4 sm:p-6">
+      <CardTitle className="text-lg sm:text-xl">Ticket supporto</CardTitle>
+      <CardDescription className="leading-6">Filtra i ticket e aggiorna lo stato operativo.</CardDescription>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-[220px_220px_1fr_auto_auto]">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-[220px_220px_minmax(0,1fr)_auto_auto]">
         <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
           {STATUS_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -307,117 +309,144 @@ export function AdminSupportTicketsTable({ initialTickets }: AdminSupportTickets
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Cerca per nome, email o messaggio"
+          className="sm:col-span-2 xl:col-span-1"
         />
 
-        <Button type="button" variant="secondary" disabled={loadingFilters} onClick={loadTickets}>
+        <Button type="button" variant="secondary" className="w-full xl:w-auto" disabled={loadingFilters} onClick={loadTickets}>
           {loadingFilters ? "Carico..." : "Applica filtri"}
         </Button>
 
-        <Button type="button" variant="ghost" disabled={loadingFilters} onClick={resetFilters}>
+        <Button type="button" variant="ghost" className="w-full xl:w-auto" disabled={loadingFilters} onClick={resetFilters}>
           Reset
         </Button>
       </div>
 
-      {statusMessage ? <p className="mt-3 text-sm text-zinc-700">{statusMessage}</p> : null}
+      {statusMessage ? <p className="mt-3 break-words text-sm leading-6 text-zinc-700">{statusMessage}</p> : null}
 
       <div className="mt-4 space-y-3">
         {tickets.length === 0 ? (
           <p className="text-sm text-zinc-500">Nessun ticket per i filtri selezionati.</p>
         ) : (
-          tickets.map((ticket) => (
-            <div key={ticket.id} className="rounded-2xl border border-zinc-200 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-zinc-800">
-                  {ticket.name} • {ticket.email}
-                </p>
-                <span className={`rounded-full px-2 py-1 text-xs font-semibold ${STATUS_BADGE_STYLES[ticket.status]}`}>
-                  {STATUS_LABELS[ticket.status]}
-                </span>
-              </div>
+          tickets.map((ticket) => {
+            const isExpanded = expandedTicketId === ticket.id;
 
-              <p className="mt-1 text-xs text-zinc-500">
-                {CATEGORY_LABELS[ticket.category]} • {new Date(ticket.created_at).toLocaleString("it-IT")} •{" "}
-                {ticket.books?.title ?? "Nessun libro indicato"}
-              </p>
-
-              <div className="mt-3 space-y-2 rounded-2xl bg-zinc-50 p-3">
-                {ticket.messages.map((message, index) => (
-                  <div
-                    key={`${ticket.id}-${index}-${message.created_at}`}
-                    className={`max-w-[92%] rounded-2xl px-3 py-2 text-sm ${
-                      message.sender === "admin" ? "ml-auto bg-rose-100 text-rose-900" : "bg-white text-zinc-700"
-                    }`}
-                  >
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-                      {message.sender === "admin" ? "Admin" : "Utente"}
-                    </p>
-                    <p className="mt-1 whitespace-pre-line">{message.content}</p>
-                    <p className="mt-2 text-[11px] text-zinc-500">{new Date(message.created_at).toLocaleString("it-IT")}</p>
+            return (
+              <div key={ticket.id} className="rounded-2xl border border-zinc-200 bg-white">
+                <button
+                  type="button"
+                  className="flex w-full items-start justify-between gap-3 p-3 text-left sm:items-center"
+                  aria-expanded={isExpanded}
+                  onClick={() => setExpandedTicketId((current) => (current === ticket.id ? null : ticket.id))}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="grid gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center sm:gap-3">
+                      <p className="text-sm font-semibold leading-6 text-zinc-800 sm:truncate">{ticket.name}</p>
+                      <p className="text-xs leading-5 text-zinc-500 sm:truncate sm:text-sm">{ticket.email}</p>
+                      <div className="flex items-center gap-2 sm:justify-end">
+                        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${STATUS_BADGE_STYLES[ticket.status]}`}>
+                          {STATUS_LABELS[ticket.status]}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs leading-5 text-zinc-500">
+                      <span>{CATEGORY_LABELS[ticket.category]}</span>
+                      <span className="hidden sm:inline">•</span>
+                      <span>{new Date(ticket.created_at).toLocaleString("it-IT")}</span>
+                      <span className="hidden sm:inline">•</span>
+                      <span>{ticket.books?.title ?? "Nessun libro indicato"}</span>
+                    </div>
                   </div>
-                ))}
+                  <ChevronDown
+                    className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                  />
+                </button>
+
+                {isExpanded ? (
+                  <div className="border-t border-zinc-200 px-3 py-3">
+                    <div className="space-y-2 rounded-2xl bg-zinc-50 p-3">
+                      {ticket.messages.map((message, index) => (
+                        <div
+                          key={`${ticket.id}-${index}-${message.created_at}`}
+                          className={`max-w-full rounded-2xl px-3 py-2 text-sm sm:max-w-[92%] ${
+                            message.sender === "admin" ? "ml-auto bg-rose-100 text-rose-900" : "bg-white text-zinc-700"
+                          }`}
+                        >
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                            {message.sender === "admin" ? "Admin" : "Utente"}
+                          </p>
+                          <p className="mt-1 whitespace-pre-line">{message.content}</p>
+                          <p className="mt-2 text-[11px] text-zinc-500">{new Date(message.created_at).toLocaleString("it-IT")}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-3">
+                      <Textarea
+                        value={replyByTicket[ticket.id] ?? ""}
+                        onChange={(event) =>
+                          setReplyByTicket((prev) => ({
+                            ...prev,
+                            [ticket.id]: event.target.value,
+                          }))
+                        }
+                        placeholder="Scrivi una risposta da inviare via email all'utente"
+                        rows={3}
+                      />
+                    </div>
+
+                    <div className="mt-3 grid gap-2 sm:flex sm:flex-wrap sm:items-center">
+                      <Select
+                        value={statusSelectionByTicket[ticket.id] ?? ticket.status}
+                        onChange={(event) =>
+                          setStatusSelectionByTicket((prev) => ({
+                            ...prev,
+                            [ticket.id]: event.target.value as SupportTicketStatus,
+                          }))
+                        }
+                        className="w-full sm:w-[220px]"
+                      >
+                        {STATUS_OPTIONS.filter((option) => option.value !== "all").map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </Select>
+
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="w-full sm:w-auto"
+                        disabled={updatingTicketId === ticket.id}
+                        onClick={() => updateTicketStatus(ticket)}
+                      >
+                        {updatingTicketId === ticket.id ? "Aggiorno..." : "Aggiorna stato"}
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="w-full sm:w-auto"
+                        disabled={updatingTicketId === ticket.id}
+                        onClick={() => replyOnly(ticket)}
+                      >
+                        {updatingTicketId === ticket.id ? "Invio..." : "Invia risposta"}
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="primary"
+                        className="w-full sm:w-auto"
+                        disabled={updatingTicketId === ticket.id}
+                        onClick={() => replyAndClose(ticket)}
+                      >
+                        {updatingTicketId === ticket.id ? "Invio..." : "Invia risposta e chiudi"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
-
-              <div className="mt-3">
-                <Textarea
-                  value={replyByTicket[ticket.id] ?? ""}
-                  onChange={(event) =>
-                    setReplyByTicket((prev) => ({
-                      ...prev,
-                      [ticket.id]: event.target.value,
-                    }))
-                  }
-                  placeholder="Scrivi una risposta da inviare via email all'utente"
-                  rows={3}
-                />
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Select
-                  value={statusSelectionByTicket[ticket.id] ?? ticket.status}
-                  onChange={(event) =>
-                    setStatusSelectionByTicket((prev) => ({
-                      ...prev,
-                      [ticket.id]: event.target.value as SupportTicketStatus,
-                    }))
-                  }
-                  className="w-[220px]"
-                >
-                  {STATUS_OPTIONS.filter((option) => option.value !== "all").map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={updatingTicketId === ticket.id}
-                  onClick={() => updateTicketStatus(ticket)}
-                >
-                  {updatingTicketId === ticket.id ? "Aggiorno..." : "Aggiorna stato"}
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={updatingTicketId === ticket.id}
-                  onClick={() => replyOnly(ticket)}
-                >
-                  {updatingTicketId === ticket.id ? "Invio..." : "Invia risposta"}
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="primary"
-                  disabled={updatingTicketId === ticket.id}
-                  onClick={() => replyAndClose(ticket)}
-                >
-                  {updatingTicketId === ticket.id ? "Invio..." : "Invia risposta e chiudi"}
-                </Button>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </Card>

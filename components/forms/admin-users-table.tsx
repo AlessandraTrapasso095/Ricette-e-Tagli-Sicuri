@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ChevronDown } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
@@ -87,6 +88,7 @@ function normalizeSearchValue(value: string | null | undefined) {
 
 export function AdminUsersTable({ users, books }: AdminUsersTableProps) {
   const [rows, setRows] = useState(users);
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [revokeSelectionByUser, setRevokeSelectionByUser] = useState<Record<string, string>>({});
@@ -308,113 +310,133 @@ export function AdminUsersTable({ users, books }: AdminUsersTableProps) {
         {filteredRows.map((user) => {
           const activeBookIds = new Set(user.unlockedBookRows.map((book) => book.id));
           const grantableBooks = books.filter((book) => !activeBookIds.has(book.id));
+          const isExpanded = expandedUserId === user.id;
+          const statusLabel = user.isSuspended ? "Sospeso" : user.isActiveNow ? "Online" : "Attivo";
 
           return (
-            <div key={user.id} className="rounded-2xl border border-zinc-200 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="text-sm font-semibold text-zinc-800">
-                    {user.firstName} {user.lastName}
+            <div key={user.id} className="rounded-2xl border border-zinc-200 bg-white">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-3 p-3 text-left"
+                aria-expanded={isExpanded}
+                onClick={() => setExpandedUserId((current) => (current === user.id ? null : user.id))}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="grid gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center sm:gap-3">
+                    <p className="truncate text-sm font-semibold text-zinc-800">
+                      {user.firstName} {user.lastName}
+                    </p>
+                    <p className="truncate text-xs text-zinc-500 sm:text-sm">{user.email}</p>
+                    <div className="flex items-center gap-2 sm:justify-end">
+                      {user.isActiveNow ? <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" /> : null}
+                      <span
+                        className={`text-xs font-semibold ${
+                          user.isSuspended ? "text-red-600" : user.isActiveNow ? "text-emerald-700" : "text-zinc-700"
+                        }`}
+                      >
+                        {statusLabel}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <ChevronDown
+                  className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                />
+              </button>
+
+              {isExpanded ? (
+                <div className="border-t border-zinc-200 px-3 py-3">
+                  <p className="text-xs text-zinc-600">
+                    Nome bimbo/a: {user.childName ?? "Non compilato"} • Età:{" "}
+                    {user.childAgeMonths !== null ? `${user.childAgeMonths} mesi` : "Non compilata"} • Svezzamento:{" "}
+                    {user.childFeedingStyle ? FEEDING_STYLE_LABELS[user.childFeedingStyle] : "Non impostato"}
                   </p>
-                  <p className="text-xs text-zinc-500">{user.email}</p>
+
+                  <p className="mt-1 text-xs text-zinc-600">
+                    Libri sbloccati: {user.unlockedBooks} • Tentativi falliti: {user.failedAttempts} • Ultimo accesso:{" "}
+                    {user.lastSignInAt ? new Date(user.lastSignInAt).toLocaleString("it-IT") : "n/d"}
+                  </p>
+
+                  {user.bannedUntil ? (
+                    <p className="mt-1 text-xs text-red-600">Sospeso fino a: {new Date(user.bannedUntil).toLocaleString("it-IT")}</p>
+                  ) : null}
+
+                  {user.unlockedBookRows.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Select
+                        value={revokeSelectionByUser[user.id] ?? ""}
+                        onChange={(event) =>
+                          setRevokeSelectionByUser((prev) => ({
+                            ...prev,
+                            [user.id]: event.target.value,
+                          }))
+                        }
+                        className="max-w-xs"
+                      >
+                        <option value="">Libro da revocare</option>
+                        {user.unlockedBookRows.map((book) => (
+                          <option key={book.id} value={book.id}>
+                            {book.title}
+                          </option>
+                        ))}
+                      </Select>
+                      <Button variant="danger" disabled={loadingUserId === user.id} onClick={() => revokeAccess(user.id)}>
+                        {loadingUserId === user.id ? "Operazione..." : "Revoca libro"}
+                      </Button>
+                    </div>
+                  ) : null}
+
+                  {grantableBooks.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Select
+                        value={grantSelectionByUser[user.id] ?? ""}
+                        onChange={(event) =>
+                          setGrantSelectionByUser((prev) => ({
+                            ...prev,
+                            [user.id]: event.target.value,
+                          }))
+                        }
+                        className="max-w-xs"
+                      >
+                        <option value="">Libro da sbloccare</option>
+                        {grantableBooks.map((book) => (
+                          <option key={book.id} value={book.id}>
+                            {book.title}
+                          </option>
+                        ))}
+                      </Select>
+                      <Button variant="secondary" disabled={loadingUserId === user.id} onClick={() => grantAccess(user)}>
+                        {loadingUserId === user.id ? "Operazione..." : "Sblocca libro"}
+                      </Button>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Select
+                      value={suspensionByUser[user.id] ?? "unchanged"}
+                      onChange={(event) =>
+                        setSuspensionByUser((prev) => ({
+                          ...prev,
+                          [user.id]: event.target.value as SuspensionValue,
+                        }))
+                      }
+                      className="max-w-xs"
+                    >
+                      {SUSPENSION_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </Select>
+                    <Button variant="ghost" disabled={loadingUserId === user.id} onClick={() => updateSuspension(user)}>
+                      {loadingUserId === user.id ? "Operazione..." : "Aggiorna account"}
+                    </Button>
+                    <Button variant="secondary" disabled={loadingUserId === user.id} onClick={() => resetMenuChat(user)}>
+                      {loadingUserId === user.id ? "Operazione..." : "Reset menu chat"}
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {user.isActiveNow ? <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" /> : null}
-                  <span className={`text-xs font-semibold ${user.isSuspended ? "text-red-600" : "text-emerald-700"}`}>
-                    {user.isSuspended ? "Sospeso" : "Attivo"}
-                  </span>
-                </div>
-              </div>
-
-              <p className="mt-2 text-xs text-zinc-600">
-                Nome bimbo/a: {user.childName ?? "Non compilato"} • Età:{" "}
-                {user.childAgeMonths !== null ? `${user.childAgeMonths} mesi` : "Non compilata"} • Svezzamento:{" "}
-                {user.childFeedingStyle ? FEEDING_STYLE_LABELS[user.childFeedingStyle] : "Non impostato"}
-              </p>
-
-              <p className="mt-1 text-xs text-zinc-600">
-                Libri sbloccati: {user.unlockedBooks} • Tentativi falliti: {user.failedAttempts} • Ultimo accesso:{" "}
-                {user.lastSignInAt ? new Date(user.lastSignInAt).toLocaleString("it-IT") : "n/d"}
-              </p>
-
-              {user.bannedUntil ? (
-                <p className="mt-1 text-xs text-red-600">Sospeso fino a: {new Date(user.bannedUntil).toLocaleString("it-IT")}</p>
               ) : null}
-
-              {user.unlockedBookRows.length > 0 ? (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <Select
-                    value={revokeSelectionByUser[user.id] ?? ""}
-                    onChange={(event) =>
-                      setRevokeSelectionByUser((prev) => ({
-                        ...prev,
-                        [user.id]: event.target.value,
-                      }))
-                    }
-                    className="max-w-xs"
-                  >
-                    <option value="">Libro da revocare</option>
-                    {user.unlockedBookRows.map((book) => (
-                      <option key={book.id} value={book.id}>
-                        {book.title}
-                      </option>
-                    ))}
-                  </Select>
-                  <Button variant="danger" disabled={loadingUserId === user.id} onClick={() => revokeAccess(user.id)}>
-                    {loadingUserId === user.id ? "Operazione..." : "Revoca libro"}
-                  </Button>
-                </div>
-              ) : null}
-
-              {grantableBooks.length > 0 ? (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <Select
-                    value={grantSelectionByUser[user.id] ?? ""}
-                    onChange={(event) =>
-                      setGrantSelectionByUser((prev) => ({
-                        ...prev,
-                        [user.id]: event.target.value,
-                      }))
-                    }
-                    className="max-w-xs"
-                  >
-                    <option value="">Libro da sbloccare</option>
-                    {grantableBooks.map((book) => (
-                      <option key={book.id} value={book.id}>
-                        {book.title}
-                      </option>
-                    ))}
-                  </Select>
-                  <Button variant="secondary" disabled={loadingUserId === user.id} onClick={() => grantAccess(user)}>
-                    {loadingUserId === user.id ? "Operazione..." : "Sblocca libro"}
-                  </Button>
-                </div>
-              ) : null}
-
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Select
-                  value={suspensionByUser[user.id] ?? "unchanged"}
-                  onChange={(event) =>
-                    setSuspensionByUser((prev) => ({
-                      ...prev,
-                      [user.id]: event.target.value as SuspensionValue,
-                    }))
-                  }
-                  className="max-w-xs"
-                >
-                  {SUSPENSION_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-                <Button variant="ghost" disabled={loadingUserId === user.id} onClick={() => updateSuspension(user)}>
-                  {loadingUserId === user.id ? "Operazione..." : "Aggiorna account"}
-                </Button>
-                <Button variant="secondary" disabled={loadingUserId === user.id} onClick={() => resetMenuChat(user)}>
-                  {loadingUserId === user.id ? "Operazione..." : "Reset menu chat"}
-                </Button>
-              </div>
             </div>
           );
         })}
