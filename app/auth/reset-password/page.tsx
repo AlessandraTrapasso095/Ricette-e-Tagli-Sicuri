@@ -111,8 +111,10 @@ export default function ResetPasswordPage() {
         throw error;
       }
 
+      await supabase.auth.signOut();
       form.reset();
-      setStatus("Password aggiornata correttamente. Ora puoi accedere con la nuova password.");
+      setReady(false);
+      setStatus("Password aggiornata correttamente. Inserisci ora le nuove credenziali nella pagina di accesso.");
       setTimeout(() => {
         window.location.href = "/login";
       }, 1200);
