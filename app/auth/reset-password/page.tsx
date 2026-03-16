@@ -42,12 +42,43 @@ export default function ResetPasswordPage() {
     let active = true;
 
     async function bootstrap() {
-      const { data } = await supabase.auth.getSession();
+      const currentUrl = new URL(window.location.href);
+      const hashParams = new URLSearchParams(currentUrl.hash.replace(/^#/, ""));
+      const code = currentUrl.searchParams.get("code");
+      const accessToken = hashParams.get("access_token");
+      const refreshToken = hashParams.get("refresh_token");
+
+      let session: Session | null = null;
+
+      if (code) {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+        if (!error) {
+          session = data.session ?? null;
+        }
+      } else if (accessToken && refreshToken) {
+        const { data, error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (!error) {
+          session = data.session ?? null;
+        }
+      }
+
+      if (!session) {
+        const { data } = await supabase.auth.getSession();
+        session = data.session ?? null;
+      }
+
       if (!active) {
         return;
       }
 
-      setReady(Boolean(data.session));
+      if (session) {
+        window.history.replaceState({}, document.title, currentUrl.pathname);
+      }
+
+      setReady(Boolean(session));
     }
 
     void bootstrap();

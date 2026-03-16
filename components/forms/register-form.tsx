@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { OAuthAuthButtons } from "@/components/forms/oauth-auth-buttons";
 import { registerSchema } from "@/lib/validation/forms";
 
 type RegisterValues = z.infer<typeof registerSchema>;
@@ -125,6 +126,8 @@ export function RegisterForm() {
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? "Creazione account..." : "Crea il tuo account"}
       </Button>
+
+      <OAuthAuthButtons mode="register" />
 
       <p className="text-center text-sm text-zinc-500">
         Hai già un account?{" "}

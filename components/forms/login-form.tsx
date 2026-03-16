@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { OAuthAuthButtons } from "@/components/forms/oauth-auth-buttons";
 import { loginSchema } from "@/lib/validation/forms";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
@@ -94,6 +95,8 @@ export function LoginForm() {
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? "Accesso in corso..." : "Accedi"}
       </Button>
+
+      <OAuthAuthButtons mode="login" />
 
       <p className="text-center text-sm text-zinc-500">
         Non hai un account?{" "}
