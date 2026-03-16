@@ -13,45 +13,45 @@ interface QuickOverviewProps {
 export function QuickOverview({ userName, unlockedCount, bonusCount, hasChildProfile, hasChatAccess }: QuickOverviewProps) {
   return (
     <div className="space-y-5">
-      <Card className="p-5 text-center sm:p-6 sm:text-left">
-        <CardTitle className="mx-auto max-w-3xl text-2xl leading-tight sm:mx-0 sm:max-w-none sm:text-[2.05rem]">
+      <Card className="rounded-[2rem] px-6 pb-7 pt-9 text-center shadow-[0_14px_34px_rgba(236,72,153,0.07)] sm:rounded-3xl sm:p-6 sm:text-left sm:shadow-[0_10px_35px_rgba(236,72,153,0.08)]">
+        <CardTitle className="mx-auto max-w-[18.25rem] text-[1.72rem] leading-[1.28] font-bold tracking-[-0.025em] sm:mx-0 sm:max-w-none sm:text-[2.05rem] sm:font-semibold">
           Ciao {userName}, benvenuta nell&apos;Area Lettori
         </CardTitle>
-        <CardDescription className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed sm:mx-0 sm:max-w-none sm:text-base">
+        <CardDescription className="mx-auto mt-6 max-w-[20rem] text-[0.98rem] leading-[1.65] text-zinc-500 sm:mx-0 sm:mt-3 sm:max-w-none sm:text-base sm:leading-relaxed">
           Da qui gestisci i tuoi libri sbloccati, i bonus PDF e i menu giornalieri personalizzati.
         </CardDescription>
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="mt-8 flex flex-col gap-4 sm:mt-6 sm:flex-row sm:flex-wrap sm:items-center">
           {hasChatAccess ? (
             <Link
               href="/dashboard/chat-menu"
-              className="rounded-2xl bg-rose-500 px-4 py-3.5 text-center text-sm font-bold text-white transition hover:bg-rose-600 sm:px-5 sm:py-3"
+              className="rounded-[1.45rem] bg-rose-500 px-4 py-4 text-center text-[1.05rem] font-bold text-white transition hover:bg-rose-600 sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
             >
               Cosa mangiamo oggi?
             </Link>
           ) : (
             <Link
               href="/dashboard/libri"
-              className="rounded-2xl bg-amber-100 px-4 py-3.5 text-center text-sm font-bold text-amber-900 transition hover:bg-amber-200 sm:px-5 sm:py-3"
+              className="rounded-[1.45rem] bg-amber-100 px-4 py-4 text-center text-[1.05rem] font-bold text-amber-900 transition hover:bg-amber-200 sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
             >
               Sblocca un libro per attivare la chat
             </Link>
           )}
           <Link
             href="/dashboard/libri"
-            className="rounded-2xl bg-rose-50 px-4 py-3.5 text-center text-sm font-bold text-rose-900 transition hover:bg-rose-100 sm:px-5 sm:py-3"
+            className="rounded-[1.45rem] bg-rose-50 px-4 py-4 text-center text-[1.05rem] font-bold text-rose-900 transition hover:bg-rose-100 sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
           >
             Sblocca un altro libro
           </Link>
           <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
             <Link
               href="/dashboard/supporto"
-              className="rounded-2xl bg-white px-4 py-3 text-center text-sm font-semibold text-zinc-800 shadow-sm ring-1 ring-zinc-200 transition hover:bg-rose-50 hover:text-rose-800 sm:px-5"
+              className="rounded-[1.35rem] bg-white px-4 py-3.5 text-center text-[0.98rem] font-semibold text-zinc-800 shadow-[0_8px_18px_rgba(15,23,42,0.06)] ring-1 ring-zinc-200 transition hover:bg-rose-50 hover:text-rose-800 sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm sm:shadow-sm"
             >
               Chiedi Supporto
             </Link>
             <Link
               href="/dashboard/impostazioni"
-              className="rounded-2xl bg-zinc-100 px-4 py-3 text-center text-sm font-semibold text-zinc-800 transition hover:bg-zinc-200 sm:px-5"
+              className="rounded-[1.35rem] bg-zinc-100 px-4 py-3.5 text-center text-[0.98rem] font-semibold text-zinc-800 transition hover:bg-zinc-200 sm:rounded-2xl sm:px-5 sm:py-3 sm:text-sm"
             >
               Impostazioni
             </Link>
@@ -61,21 +61,21 @@ export function QuickOverview({ userName, unlockedCount, bonusCount, hasChildPro
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Link href="/dashboard/libri" className="block">
-          <Card className="flex min-h-[112px] flex-col items-center justify-center text-center transition hover:-translate-y-0.5 hover:border-rose-200 hover:shadow-[0_14px_35px_rgba(236,72,153,0.12)] sm:min-h-[128px] sm:items-start sm:justify-start sm:text-left">
-            <CardTitle className="text-4xl sm:text-3xl">{unlockedCount}</CardTitle>
-            <CardDescription className="mt-2 text-xs font-medium sm:text-base">Libri sbloccati</CardDescription>
+          <Card className="flex min-h-[10.75rem] flex-col items-center justify-center text-center shadow-[0_14px_34px_rgba(236,72,153,0.07)] transition hover:-translate-y-0.5 hover:border-rose-200 hover:shadow-[0_14px_35px_rgba(236,72,153,0.12)] sm:min-h-[128px] sm:items-start sm:justify-start sm:text-left sm:shadow-[0_10px_35px_rgba(236,72,153,0.08)]">
+            <CardTitle className="text-[3.15rem] leading-none sm:text-3xl">{unlockedCount}</CardTitle>
+            <CardDescription className="mt-4 text-[0.98rem] font-medium sm:mt-2 sm:text-base">Libri sbloccati</CardDescription>
           </Card>
         </Link>
         <Link href="/dashboard/bonus" className="block">
-          <Card className="flex min-h-[112px] flex-col items-center justify-center text-center transition hover:-translate-y-0.5 hover:border-rose-200 hover:shadow-[0_14px_35px_rgba(236,72,153,0.12)] sm:min-h-[128px] sm:items-start sm:justify-start sm:text-left">
-            <CardTitle className="text-4xl sm:text-3xl">{bonusCount}</CardTitle>
-            <CardDescription className="mt-2 text-xs font-medium sm:text-base">Bonus disponibili</CardDescription>
+          <Card className="flex min-h-[10.75rem] flex-col items-center justify-center text-center shadow-[0_14px_34px_rgba(236,72,153,0.07)] transition hover:-translate-y-0.5 hover:border-rose-200 hover:shadow-[0_14px_35px_rgba(236,72,153,0.12)] sm:min-h-[128px] sm:items-start sm:justify-start sm:text-left sm:shadow-[0_10px_35px_rgba(236,72,153,0.08)]">
+            <CardTitle className="text-[3.15rem] leading-none sm:text-3xl">{bonusCount}</CardTitle>
+            <CardDescription className="mt-4 text-[0.98rem] font-medium sm:mt-2 sm:text-base">Bonus disponibili</CardDescription>
           </Card>
         </Link>
         <Link href="/dashboard/profilo-bambino" className="block">
-          <Card className="flex min-h-[112px] flex-col items-center justify-center text-center transition hover:-translate-y-0.5 hover:border-rose-200 hover:shadow-[0_14px_35px_rgba(236,72,153,0.12)] sm:min-h-[128px] sm:items-start sm:justify-start sm:text-left">
-            <CardTitle className="text-3xl sm:text-2xl">{hasChildProfile ? "Completo" : "Da compilare"}</CardTitle>
-            <CardDescription className="mt-2 text-xs font-medium sm:text-base">Profilo bambino</CardDescription>
+          <Card className="flex min-h-[10.75rem] flex-col items-center justify-center text-center shadow-[0_14px_34px_rgba(236,72,153,0.07)] transition hover:-translate-y-0.5 hover:border-rose-200 hover:shadow-[0_14px_35px_rgba(236,72,153,0.12)] sm:min-h-[128px] sm:items-start sm:justify-start sm:text-left sm:shadow-[0_10px_35px_rgba(236,72,153,0.08)]">
+            <CardTitle className="text-[2.55rem] leading-none sm:text-2xl">{hasChildProfile ? "Completo" : "Da compilare"}</CardTitle>
+            <CardDescription className="mt-4 text-[0.98rem] font-medium sm:mt-2 sm:text-base">Profilo bambino</CardDescription>
           </Card>
         </Link>
       </div>

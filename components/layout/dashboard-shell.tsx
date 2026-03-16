@@ -14,7 +14,7 @@ export function DashboardShell({ children, rightTop }: DashboardShellProps) {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,_rgba(244,114,182,0.14),_transparent_35%),radial-gradient(circle_at_top_left,_rgba(253,186,116,0.12),_transparent_32%)]">
       <header className="sticky top-0 z-40 border-b border-rose-100 bg-white/95 shadow-sm backdrop-blur sm:hidden">
-        <div className="mx-auto w-full max-w-7xl px-4 py-3">
+        <div className="mx-auto w-full max-w-7xl px-4 py-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
               <BackNavButton
@@ -26,7 +26,7 @@ export function DashboardShell({ children, rightTop }: DashboardShellProps) {
               <BrandLogo href="/dashboard" />
             </div>
             {rightTop ? (
-              <div className="flex shrink-0 items-center justify-end [&_button]:rounded-full [&_button]:border [&_button]:border-rose-300 [&_button]:bg-white [&_button]:px-4 [&_button]:py-2 [&_button]:text-sm [&_button]:font-semibold [&_button]:text-rose-700 [&_button]:shadow-none hover:[&_button]:bg-rose-50">
+              <div className="flex shrink-0 items-center justify-end [&_button]:rounded-full [&_button]:border-2 [&_button]:border-rose-400 [&_button]:bg-white [&_button]:px-5 [&_button]:py-2.5 [&_button]:text-lg [&_button]:font-bold [&_button]:text-rose-500 [&_button]:shadow-none hover:[&_button]:bg-rose-50">
                 {rightTop}
               </div>
             ) : null}
