@@ -13,6 +13,8 @@ const SMALL_PIECES_TERMS = ["piccoli pezzi", "pezzi piccoli", "morbid", "schiacc
 const CLASSICO_ALLOWED_TERMS = ["crema", "vellutata", "pappa", "schiacciat", "purea", "passat", "pastina", "baby riso", "porridge", "yogurt", "frullat"];
 const CLASSICO_FORBIDDEN_TERMS = ["polpett", "burger", "pancake", "finger", "bastonc", "pane", "tort", "pezz", "formato grande", "frittat"];
 const AUTOSVEZZAMENTO_TERMS = ["bastonc", "polpett", "finger", "frittat", "pancake", "pasta corta", "tagli sicuri", "burger", "pane", "tort", "porridge"];
+const AUTOS_LUNCH_ALLOWED_CARBS = ["pasta", "riso", "quinoa", "cous cous", "orzo"];
+const AUTOS_LUNCH_FORBIDDEN_TERMS = ["burger", "polpett", "cotolett", "frittat", "sformat"];
 const INGREDIENT_QUANTITY_PATTERN =
   /\b(\d+(?:[.,]\d+)?\s?(?:g|gr|grammi|ml|cucchiaini?|cucchiai|vasetto|vasetti|fette?|pezzi?|pz)|1\/2|mezzo|mezza|q\.b\.|qb|un cucchiaino|una fetta|uno yogurt|una banana)\b/i;
 const BROAD_KEYWORDS_TO_IGNORE = new Set(["carne", "pesce", "uovo", "uova", "legumi", "verdure", "frutta", "cereali"]);
@@ -191,6 +193,21 @@ function validateFeedingStyle(menu: DailyMenuSchema, policy: MenuPolicyContext, 
     issues.push("Nell'autosvezzamento servono porridge, polpette, pancake, burger morbidi, pane o finger food nei tagli sicuri.");
   }
 
+  if (policy.feedingStyle === "autosvezzamento") {
+    const lunch = menu.meals.find((meal) => meal.mealType === "pranzo");
+    if (lunch) {
+      const lunchText = normalizeText(`${lunch.dishName} ${lunch.ingredients.join(" ")} ${lunch.preparation}`);
+      const hasAllowedCarb = AUTOS_LUNCH_ALLOWED_CARBS.some((term) => lunchText.includes(normalizeText(term)));
+      const hasForbiddenShape = AUTOS_LUNCH_FORBIDDEN_TERMS.some((term) => lunchText.includes(normalizeText(term)));
+
+      if (!hasAllowedCarb || hasForbiddenShape) {
+        issues.push(
+          "Nell'autosvezzamento il pranzo deve essere un primo o un piatto a base di pasta, riso, quinoa, cous cous, orzo o cereali simili con proteina e verdura; burger, polpette, cotolette e frittate vanno a cena.",
+        );
+      }
+    }
+  }
+
   if (policy.feedingStyle === "misto") {
     const hasClassico = includesAny(mainMealsText, CLASSICO_ALLOWED_TERMS);
     const hasAuto = includesAny(mainMealsText, AUTOSVEZZAMENTO_TERMS);
@@ -320,6 +337,11 @@ function extractRepeatedFoods(firstMeal: DailyMenuSchema["meals"][number], secon
   return keywords.filter((keyword) => firstText.includes(keyword) && secondText.includes(keyword));
 }
 
+function getMealSignature(meal: DailyMenuSchema["meals"][number]) {
+  const ingredients = [...meal.ingredients].map((value) => normalizeText(value)).sort().join(",");
+  return `${meal.mealType}:${normalizeText(meal.dishName)}:${ingredients}`;
+}
+
 function validateDailyRotation(menu: DailyMenuSchema, issues: string[]) {
   const breakfast = menu.meals.find((meal) => meal.mealType === "colazione");
   const snack = menu.meals.find((meal) => meal.mealType === "merenda");
@@ -328,15 +350,17 @@ function validateDailyRotation(menu: DailyMenuSchema, issues: string[]) {
 
   if (breakfast && snack) {
     const repeated = extractRepeatedFoods(breakfast, snack);
-    if (repeated.length > 0) {
-      issues.push(`Colazione e merenda non devono ripetere gli stessi alimenti principali (${[...new Set(repeated)].join(", ")}).`);
+    if (repeated.length > 0 || getMealSignature(breakfast) === getMealSignature(snack)) {
+      const detail = repeated.length > 0 ? ` (${[...new Set(repeated)].join(", ")})` : "";
+      issues.push(`Colazione e merenda non devono ripetere gli stessi alimenti principali${detail}.`);
     }
   }
 
   if (lunch && dinner) {
     const repeated = extractRepeatedFoods(lunch, dinner);
-    if (repeated.length > 0) {
-      issues.push(`Pranzo e cena non devono ripetere gli stessi alimenti principali (${[...new Set(repeated)].join(", ")}).`);
+    if (repeated.length > 0 || getMealSignature(lunch) === getMealSignature(dinner)) {
+      const detail = repeated.length > 0 ? ` (${[...new Set(repeated)].join(", ")})` : "";
+      issues.push(`Pranzo e cena non devono ripetere gli stessi alimenti principali${detail}.`);
     }
   }
 }

@@ -206,7 +206,8 @@ export const businessRulesConfig = {
     ],
     autosvezzamento: [
       "Per colazione e merenda alterna tra torte morbide, pancake, banana bread, budini di frutta, frullati, muffin morbidi e proposte simili senza zucchero, miele o sale.",
-      "Per pranzo alterna sempre primi piatti di pasta con legumi e verdura, pesce e verdura, latticini freschi e verdura, carne e verdura.",
+      "Per pranzo alterna sempre primi o piatti a base di pasta, riso, quinoa, cous cous, orzo o cereali simili con una proteina e una verdura.",
+      "A pranzo non proporre burger, polpette, cotolette o frittate: queste proposte vanno a cena.",
       "Per cena proponi sempre un pasto completo con verdura, carboidrato, proteina e grasso buono, alternando burger morbidi, polpette, cotolette, vellutate complete, sformati o proposte simili.",
     ],
     misto: [

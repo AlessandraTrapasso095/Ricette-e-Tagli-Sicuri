@@ -59,6 +59,22 @@ const CHAT_INSTRUCTION_GROUPS = [
   },
 ] as const;
 
+function isMenuModificationPrompt(prompt: string) {
+  const normalized = prompt.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  return [
+    /\bsostituisci\b/,
+    /\b(?:cambia|modifica|rifai|trasforma)\b.+\b(?:colazione|pranzo|merenda|cena)\b/,
+    /\b(?:senza|no|niente|evita)\b/,
+    /\bnon ho\b/,
+    /\bal posto di\b/,
+    /\binvece di\b/,
+  ].some((pattern) => pattern.test(normalized));
+}
+
 export function ChatMenuPanel() {
   const [sessions, setSessions] = useState<MenuSession[]>([]);
   const [messages, setMessages] = useState<MenuMessage[]>([]);
@@ -163,6 +179,7 @@ export function ChatMenuPanel() {
     latestMenu?.childProfileSummary.weaningType === "autosvezzamento" || latestMenu?.childProfileSummary.weaningType === "misto";
 
   const hasGeneratedMenu = sessions.length > 0 || generated !== null;
+  const isModificationRequest = Boolean(activeSessionId && hasGeneratedMenu && isMenuModificationPrompt(prompt));
   const canSubmit = prompt.trim().length >= 2 && (!hasGeneratedMenu || Boolean(activeSessionId));
   const textareaPlaceholder = hasGeneratedMenu ? MODIFY_CHAT_PLACEHOLDER : DEFAULT_CHAT_PROMPT;
 
@@ -182,7 +199,6 @@ export function ChatMenuPanel() {
     setStatusMessage(null);
 
     try {
-      const isModificationRequest = Boolean(activeSessionId && hasGeneratedMenu);
       const requestPayload = {
         prompt,
         saveMenu: false,
@@ -214,7 +230,7 @@ export function ChatMenuPanel() {
       });
       setActiveSessionId(responseData.sessionId);
       setPrompt("");
-      setStatusMessage(isModificationRequest ? "Menu modificato con successo." : "Menu generato con successo.");
+      setStatusMessage(isModificationRequest ? "Menu modificato con successo." : "Nuova sessione menu generata con successo.");
 
       await loadSessions();
       await loadMessages(responseData.sessionId);
@@ -291,7 +307,13 @@ export function ChatMenuPanel() {
           />
           <div className="grid gap-3 sm:flex sm:flex-wrap">
             <Button className="w-full sm:w-auto" type="submit" disabled={loading || !canSubmit}>
-              {loading ? (hasGeneratedMenu ? "Modifica in corso..." : "Generazione menu...") : hasGeneratedMenu ? "Modifica menu" : "Genera menu"}
+              {loading
+                ? isModificationRequest
+                  ? "Modifica in corso..."
+                  : "Generazione menu..."
+                : isModificationRequest
+                  ? "Modifica menu"
+                  : "Genera nuova sessione"}
             </Button>
             <Button
               type="button"

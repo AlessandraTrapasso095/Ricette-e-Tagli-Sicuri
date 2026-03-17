@@ -4,7 +4,7 @@ import OpenAI from "openai";
 import { subDays } from "date-fns";
 
 import { businessRulesConfig } from "@/config/business-rules";
-import { MENU_SESSION_RESET_TIMEZONE } from "@/config/chat-session";
+import { MENU_SESSION_MAX_DAILY, MENU_SESSION_RESET_TIMEZONE } from "@/config/chat-session";
 import { getEnv } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getStartOfDayInTimeZone } from "@/lib/timezone/day-boundary";
@@ -84,6 +84,29 @@ async function archiveExpiredDailySessions(admin: AdminClient, userId: string, d
 
   if (error) {
     throw new Error("Impossibile aggiornare le sessioni giornaliere.");
+  }
+}
+
+async function enforceDailySessionLimit(params: {
+  admin: AdminClient;
+  userId: string;
+  dayStartIso: string;
+}) {
+  const { count, error } = await params.admin
+    .from("menu_sessions")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", params.userId)
+    .eq("is_archived", false)
+    .gte("created_at", params.dayStartIso);
+
+  if (error) {
+    throw new Error("Impossibile verificare il numero di sessioni menu disponibili.");
+  }
+
+  if ((count ?? 0) >= MENU_SESSION_MAX_DAILY) {
+    throw new Error(
+      `Hai raggiunto il limite di ${MENU_SESSION_MAX_DAILY} sessioni menu per oggi. Da mezzanotte potrai generarne di nuove; puoi comunque modificare una sessione già creata.`,
+    );
   }
 }
 
@@ -418,14 +441,25 @@ const RECIPE_FAMILY_ALLOWLIST = {
   },
   autosvezzamento: {
     colazione: ["pancake", "muffin", "waffle", "crepes", "toast", "porridge", "torta", "banana-bread", "budino"],
-    pranzo: ["pasta", "riso", "quinoa", "cous-cous", "polpette", "frittata"],
+    pranzo: ["pasta", "riso", "quinoa", "cous-cous", "orzo"],
     merenda: ["muffin", "pancake", "frullato", "yogurt", "biscotti", "ciambelline", "barrette", "budino", "banana-bread", "torta"],
     cena: ["polpette", "burger", "frittata", "vellutata", "cotoletta", "sformatino"],
   },
 } as const;
 
+const AUTOS_LUNCH_ALLOWED_CARBS = ["pasta", "riso", "quinoa", "cous cous", "orzo"];
+const AUTOS_LUNCH_FORBIDDEN_TERMS = ["burger", "polpett", "cotolett", "frittat", "sformat"];
+
 function buildVariationSeed(...parts: Array<string | undefined>) {
   return parts.filter(Boolean).join("|");
+}
+
+function isInvalidAutosvezzamentoLunch(meal: DailyMenuSchema["meals"][number]) {
+  const text = mealToText(meal);
+  const hasAllowedCarb = AUTOS_LUNCH_ALLOWED_CARBS.some((term) => containsTermInText(text, term));
+  const hasDinnerStyleShape = AUTOS_LUNCH_FORBIDDEN_TERMS.some((term) => containsTermInText(text, term));
+
+  return !hasAllowedCarb || hasDinnerStyleShape;
 }
 
 function hashSeed(input: string) {
@@ -470,6 +504,103 @@ function recipeToSearchText(recipe: ChatRecipe) {
 
 function recipeContainsAnyTerm(recipe: ChatRecipe, terms: string[]) {
   return terms.some((term) => term && containsTermInText(recipeToSearchText(recipe), term));
+}
+
+function findCatalogRecipeForMeal(meal: DailyMenuSchema["meals"][number]) {
+  const mealSignature = getMealSignature(meal);
+
+  for (const style of ["classico", "autosvezzamento"] as const) {
+    for (const recipe of getCatalogRecipes(style, meal.mealType)) {
+      const recipeSignature = `${meal.mealType}:${normalizeFreeText(recipe.dishName)}:${[...recipe.ingredients]
+        .map((value) => normalizeFreeText(value))
+        .sort()
+        .join(",")}`;
+
+      if (recipeSignature === mealSignature) {
+        return recipe;
+      }
+    }
+  }
+
+  const normalizedDishName = normalizeFreeText(meal.dishName);
+  for (const style of ["classico", "autosvezzamento"] as const) {
+    const matchedByName = getCatalogRecipes(style, meal.mealType).find(
+      (recipe) => normalizeFreeText(recipe.dishName) === normalizedDishName,
+    );
+
+    if (matchedByName) {
+      return matchedByName;
+    }
+  }
+
+  return null;
+}
+
+function areMealsTooSimilar(
+  firstMeal: DailyMenuSchema["meals"][number],
+  secondMeal: DailyMenuSchema["meals"][number],
+) {
+  const repeatedTerms = extractRepeatedMealTerms(firstMeal, secondMeal);
+  const sameSignature = getMealSignature(firstMeal) === getMealSignature(secondMeal);
+  const firstRecipe = findCatalogRecipeForMeal(firstMeal);
+  const secondRecipe = findCatalogRecipeForMeal(secondMeal);
+  const sameFamily = Boolean(firstRecipe?.family && secondRecipe?.family && firstRecipe.family === secondRecipe.family);
+
+  return {
+    repeatedTerms,
+    sameSignature,
+    sameFamily,
+    tooSimilar: sameSignature || sameFamily || repeatedTerms.length > 0,
+  };
+}
+
+function rebuildMealUntilDistinct(params: {
+  mealType: MealType;
+  referenceMeal: DailyMenuSchema["meals"][number];
+  policy: MenuPolicyContext;
+  variationSeed?: string;
+  baseAvoidTerms: string[];
+}) {
+  let avoidTerms = dedupeValues(params.baseAvoidTerms);
+  let candidate = buildAlternativeMeal({
+    mealType: params.mealType,
+    policy: params.policy,
+    explicitAvoidTerms: mergeForbiddenTerms(params.policy.forbiddenTerms, avoidTerms),
+    variationSeed: buildVariationSeed(params.variationSeed, params.mealType, "distinct-initial"),
+  });
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const comparison = areMealsTooSimilar(params.referenceMeal, candidate);
+    if (!comparison.tooSimilar) {
+      return {
+        meal: candidate,
+        avoidTerms,
+      };
+    }
+
+    avoidTerms = dedupeValues([
+      ...avoidTerms,
+      ...extractMealAvoidTerms(candidate),
+      ...(comparison.sameFamily ? [findCatalogRecipeForMeal(candidate)?.family ?? ""] : []),
+    ]);
+
+    candidate = buildAlternativeMeal({
+      mealType: params.mealType,
+      policy: params.policy,
+      explicitAvoidTerms: mergeForbiddenTerms(params.policy.forbiddenTerms, avoidTerms),
+      variationSeed: buildVariationSeed(params.variationSeed, params.mealType, "distinct", String(attempt), avoidTerms.join(",")),
+    });
+  }
+
+  return {
+    meal: candidate,
+    avoidTerms,
+  };
+}
+
+function extractMealAvoidTerms(meal: DailyMenuSchema["meals"][number]) {
+  const keywords = getVarietyKeywords().filter((keyword) => containsTermInText(mealToText(meal), keyword));
+  return dedupeValues([meal.dishName, ...meal.ingredients, ...keywords].filter(Boolean));
 }
 
 function selectRecipeFromCatalog(params: {
@@ -527,7 +658,6 @@ function selectRecipeFromCatalog(params: {
     applyRecipeFilters(familyFilteredRecipes, { ignoreExcludedTerms: true, ignoreDisallowedGroups: true }),
     applyRecipeFilters(allRecipes, { ignoreExcludedTerms: true, ignoreDisallowedGroups: true }),
     allRecipes.filter((recipe) => !recipeContainsAnyTerm(recipe, params.forbiddenTerms)),
-    allRecipes,
   ];
 
   const selectedPool = candidatePools.find((pool) => pool.length > 0) ?? [];
@@ -1080,6 +1210,45 @@ function sanitizeMenuAgainstForbiddenTerms(
   };
 }
 
+function sanitizeAutosvezzamentoLunch(
+  menu: DailyMenuSchema,
+  policy: MenuPolicyContext,
+  variationSeed?: string,
+): DailyMenuSchema {
+  if (policy.feedingStyle !== "autosvezzamento") {
+    return menu;
+  }
+
+  const lunchIndex = menu.meals.findIndex((meal) => meal.mealType === "pranzo");
+  if (lunchIndex === -1) {
+    return menu;
+  }
+
+  const lunch = menu.meals[lunchIndex];
+  if (!isInvalidAutosvezzamentoLunch(lunch)) {
+    return menu;
+  }
+
+  const rebuiltLunch = buildAutosvezzamentoLunchMeal({
+    policy,
+    seed: buildVariationSeed(variationSeed, "autos-lunch-sanitize"),
+    forbiddenTerms: mergeForbiddenTerms(policy.forbiddenTerms, extractMealAvoidTerms(lunch)),
+  }).meal;
+
+  const meals = [...menu.meals];
+  meals[lunchIndex] = rebuiltLunch;
+
+  return {
+    ...menu,
+    meals,
+    shoppingList: dedupeValues(meals.flatMap((meal) => meal.ingredients)),
+    warnings: dedupeValues([
+      ...menu.warnings,
+      "Pranzo autosvezzamento corretto automaticamente: usa sempre un primo o un piatto a base di cereale con proteina e verdura.",
+    ]),
+  };
+}
+
 const BROAD_VARIETY_TERMS_TO_IGNORE = new Set(["carne", "pesce", "uovo", "uova", "legumi", "verdure", "frutta", "cereali"]);
 
 function getVarietyKeywords() {
@@ -1113,31 +1282,82 @@ function enforceDailyMealVariety(
   const breakfastIndex = meals.findIndex((meal) => meal.mealType === "colazione");
   const snackIndex = meals.findIndex((meal) => meal.mealType === "merenda");
   if (breakfastIndex !== -1 && snackIndex !== -1) {
-    const repeated = extractRepeatedMealTerms(meals[breakfastIndex], meals[snackIndex]);
-    if (repeated.length > 0) {
-      meals[snackIndex] = buildAlternativeMeal({
+    const comparison = areMealsTooSimilar(meals[breakfastIndex], meals[snackIndex]);
+    if (comparison.tooSimilar) {
+      const result = rebuildMealUntilDistinct({
         mealType: "merenda",
+        referenceMeal: meals[breakfastIndex],
         policy,
-        explicitAvoidTerms: mergeForbiddenTerms(policy.forbiddenTerms, repeated),
-        variationSeed: buildVariationSeed(variationSeed, "merenda", repeated.join(",")),
+        variationSeed: buildVariationSeed(variationSeed, "merenda", comparison.repeatedTerms.join(",")),
+        baseAvoidTerms: dedupeValues([...comparison.repeatedTerms, ...extractMealAvoidTerms(meals[breakfastIndex])]),
       });
-      warnings.push(`Merenda variata automaticamente per evitare ripetizioni con la colazione (${repeated.join(", ")}).`);
+      meals[snackIndex] = result.meal;
+      warnings.push(
+        `Merenda variata automaticamente per evitare ripetizioni con la colazione (${result.avoidTerms.slice(0, 4).join(", ")}).`,
+      );
     }
   }
 
   const lunchIndex = meals.findIndex((meal) => meal.mealType === "pranzo");
   const dinnerIndex = meals.findIndex((meal) => meal.mealType === "cena");
   if (lunchIndex !== -1 && dinnerIndex !== -1) {
-    const repeated = extractRepeatedMealTerms(meals[lunchIndex], meals[dinnerIndex]);
-    if (repeated.length > 0) {
-      meals[dinnerIndex] = buildAlternativeMeal({
+    const comparison = areMealsTooSimilar(meals[lunchIndex], meals[dinnerIndex]);
+    if (comparison.tooSimilar) {
+      const result = rebuildMealUntilDistinct({
         mealType: "cena",
+        referenceMeal: meals[lunchIndex],
         policy,
-        explicitAvoidTerms: mergeForbiddenTerms(policy.forbiddenTerms, repeated),
-        variationSeed: buildVariationSeed(variationSeed, "cena", repeated.join(",")),
+        variationSeed: buildVariationSeed(variationSeed, "cena", comparison.repeatedTerms.join(",")),
+        baseAvoidTerms: dedupeValues([...comparison.repeatedTerms, ...extractMealAvoidTerms(meals[lunchIndex])]),
       });
-      warnings.push(`Cena variata automaticamente per evitare ripetizioni con il pranzo (${repeated.join(", ")}).`);
+      meals[dinnerIndex] = result.meal;
+      warnings.push(
+        `Cena variata automaticamente per evitare ripetizioni con il pranzo (${result.avoidTerms.slice(0, 4).join(", ")}).`,
+      );
     }
+  }
+
+  return {
+    ...menu,
+    meals,
+    shoppingList: dedupeValues(meals.flatMap((meal) => meal.ingredients)),
+    warnings: dedupeValues(warnings),
+  };
+}
+
+function enforceSessionVarietyAgainstPreviousMenu(
+  menu: DailyMenuSchema,
+  previousMenu: DailyMenuSchema | undefined,
+  policy: MenuPolicyContext,
+  variationSeed?: string,
+): DailyMenuSchema {
+  if (!previousMenu) {
+    return menu;
+  }
+
+  const meals = [...menu.meals];
+  const warnings = [...menu.warnings];
+
+  for (const mealType of MEAL_TYPES) {
+    const currentIndex = meals.findIndex((meal) => meal.mealType === mealType);
+    const previousMeal = previousMenu.meals.find((meal) => meal.mealType === mealType);
+
+    if (currentIndex === -1 || !previousMeal) {
+      continue;
+    }
+
+    if (getMealSignature(meals[currentIndex]) !== getMealSignature(previousMeal)) {
+      continue;
+    }
+
+    const avoidTerms = extractMealAvoidTerms(previousMeal);
+    meals[currentIndex] = buildAlternativeMeal({
+      mealType,
+      policy,
+      explicitAvoidTerms: mergeForbiddenTerms(policy.forbiddenTerms, avoidTerms),
+      variationSeed: buildVariationSeed(variationSeed, mealType, "previous-session", avoidTerms.join(",")),
+    });
+    warnings.push(`Il pasto ${mealType} è stato variato automaticamente rispetto al menu precedente.`);
   }
 
   return {
@@ -1239,7 +1459,20 @@ function applyForcedAdjustments(
     warnings: dedupeValues(warnings),
   };
 
-  return enforceDailyMealVariety(sanitizeMenuAgainstForbiddenTerms(adjustedMenu, policy, variationSeed), policy, variationSeed);
+  return enforceDailyMealVariety(
+    enforceSessionVarietyAgainstPreviousMenu(
+      sanitizeAutosvezzamentoLunch(
+        sanitizeMenuAgainstForbiddenTerms(adjustedMenu, policy, variationSeed),
+        policy,
+        variationSeed,
+      ),
+      previousMenu,
+      policy,
+      variationSeed,
+    ),
+    policy,
+    variationSeed,
+  );
 }
 
 function evaluateForcedAdjustments(
@@ -1580,7 +1813,7 @@ export async function getMenuSessions(userId: string) {
     .eq("is_archived", false)
     .gte("created_at", dayStartIso)
     .order("last_message_at", { ascending: false })
-    .limit(30);
+    .limit(MENU_SESSION_MAX_DAILY);
 
   if (error) {
     throw error;
@@ -1681,6 +1914,12 @@ export async function generateMenuFromPrompt(params: {
       dayStartIso,
     });
   } else {
+    await enforceDailySessionLimit({
+      admin,
+      userId: params.userId,
+      dayStartIso,
+    });
+
     const { data: createdSession, error: sessionError } = await admin
       .from("menu_sessions")
       .insert({

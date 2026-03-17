@@ -159,6 +159,54 @@ describe("menu-validator", () => {
     expect(result.issues.some((issue) => issue.includes("Pranzo e cena non devono ripetere"))).toBe(true);
   });
 
+  it("rifiuta colazione e merenda identiche", () => {
+    const breakfast = createValidMenu().meals[0];
+    const menu = createValidMenu({
+      meals: [
+        breakfast,
+        createValidMenu().meals[1],
+        {
+          ...breakfast,
+          mealType: "merenda",
+        },
+        createValidMenu().meals[3],
+      ],
+    });
+
+    const result = validateDailyMenu(menu, createBasePolicy());
+    expect(result.isValid).toBe(false);
+    expect(result.issues.some((issue) => issue.includes("Colazione e merenda non devono ripetere"))).toBe(true);
+  });
+
+  it("rifiuta burger o polpette a pranzo nell'autosvezzamento", () => {
+    const policy = createBasePolicy({ feedingStyle: "autosvezzamento" });
+    const menu = createValidMenu({
+      childProfileSummary: {
+        ...createValidMenu().childProfileSummary,
+        weaningType: "autosvezzamento",
+      },
+      meals: [
+        createValidMenu().meals[0],
+        {
+          ...createValidMenu().meals[1],
+          dishName: "Burger di ceci e zucchine",
+          ingredients: ["40 g ceci decorticati cotti", "20 g pane morbido", "70 g zucchine cotte", "1 cucchiaino olio EVO a crudo"],
+          preparation: "Forma un burger morbido e servilo con zucchine morbide.",
+        },
+        createValidMenu().meals[2],
+        createValidMenu().meals[3],
+      ],
+    });
+
+    const result = validateDailyMenu(menu, policy);
+    expect(result.isValid).toBe(false);
+    expect(
+      result.issues.some((issue) =>
+        issue.includes("Nell'autosvezzamento il pranzo deve essere un primo o un piatto a base di pasta, riso, quinoa, cous cous, orzo o cereali simili"),
+      ),
+    ).toBe(true);
+  });
+
   it("rifiuta porzioni eccessive o da adulto", () => {
     const menu = createValidMenu({
       meals: [

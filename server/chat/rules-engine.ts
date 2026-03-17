@@ -231,6 +231,8 @@ export function buildMenuSystemPrompt(params: {
     "La preparazione deve essere completa, chiara e pratica: almeno 2-3 passaggi reali, non frasi vaghe.",
     "Nel classico usa solo consistenze cremose, frullate, passate o molto fluide: no polpette, no burger, no pancake, no pane, no torte, no finger food, no pezzi.",
     "Nell'autosvezzamento puoi usare polpette, pancake, burger morbidi, pane, torte morbide e formati piu grandi, sempre nei tagli sicuri adeguati.",
+    "Nell'autosvezzamento a pranzo usa solo primi o piatti a base di pasta, riso, quinoa, cous cous, orzo o cereali simili con proteina e verdura.",
+    "Nell'autosvezzamento burger, polpette, cotolette e frittate vanno a cena, non a pranzo.",
     "Nel misto devi mescolare davvero i due approcci: almeno una proposta classica cremosa e almeno una proposta da autosvezzamento morbida nei tagli sicuri.",
     "Se compare un alimento tondo, cilindrico o duro, specifica sempre il taglio/sicurezza corretto nelle safetyNotes.",
     "Devi proporre 4 pasti: colazione, pranzo, merenda, cena.",
