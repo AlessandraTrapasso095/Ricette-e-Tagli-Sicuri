@@ -16,7 +16,41 @@ interface AdminShellProps {
 export function AdminShell({ children }: AdminShellProps) {
   return (
     <div className="min-h-screen bg-zinc-50">
-      <div className="mx-auto flex w-full max-w-7xl gap-4 px-3 py-4 sm:gap-6 sm:px-6 sm:py-5 lg:px-8">
+      <div className="flex min-h-dvh flex-col overflow-hidden lg:hidden">
+        <header className="shrink-0 border-b border-zinc-200 bg-white/95 shadow-sm backdrop-blur">
+          <div className="mx-auto w-full max-w-7xl px-3 py-4">
+            <div className="rounded-3xl border border-zinc-200 bg-white p-3 shadow-sm">
+              <div className="flex flex-col gap-3">
+                <BrandLogo href="/admin" />
+                <div className="grid grid-cols-3 gap-2 [&>*]:min-w-0">
+                  <BackNavButton fallbackHref="/dashboard" className="h-9 rounded-2xl px-2 text-[11px]" />
+                  <Link
+                    href="/dashboard"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-9 items-center justify-center rounded-2xl bg-rose-100 px-2 text-[11px] font-semibold text-rose-900"
+                  >
+                    Dashboard
+                  </Link>
+                  <div className="[&_button]:h-9 [&_button]:w-full [&_button]:rounded-2xl [&_button]:px-2 [&_button]:text-[11px]">
+                    <LogoutButton />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-y-auto overscroll-contain">
+          <main className="mx-auto w-full max-w-7xl space-y-4 px-3 py-4 pb-24">
+            {children}
+          </main>
+        </div>
+
+        <MobileAdminNav />
+      </div>
+
+      <div className="mx-auto hidden w-full max-w-7xl gap-4 px-3 py-4 sm:gap-6 sm:px-6 sm:py-5 lg:flex lg:px-8">
         <aside className="hidden w-72 shrink-0 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm lg:sticky lg:top-5 lg:block lg:max-h-[calc(100svh-2.5rem)] lg:overflow-y-auto">
           <BackNavButton fallbackHref="/dashboard" className="mb-2" />
           <BrandLogo href="/admin" />
@@ -37,29 +71,9 @@ export function AdminShell({ children }: AdminShellProps) {
           </div>
         </aside>
         <main className="min-w-0 flex-1 space-y-4 pb-28 sm:space-y-6 sm:pb-0">
-          <div className="rounded-3xl border border-zinc-200 bg-white p-3 shadow-sm lg:hidden">
-            <div className="flex flex-col gap-3">
-              <BrandLogo href="/admin" />
-              <div className="grid grid-cols-3 gap-2 [&>*]:min-w-0">
-                <BackNavButton fallbackHref="/dashboard" className="h-9 rounded-2xl px-2 text-[11px]" />
-                <Link
-                  href="/dashboard"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex h-9 items-center justify-center rounded-2xl bg-rose-100 px-2 text-[11px] font-semibold text-rose-900"
-                >
-                  Dashboard
-                </Link>
-                <div className="[&_button]:h-9 [&_button]:w-full [&_button]:rounded-2xl [&_button]:px-2 [&_button]:text-[11px]">
-                  <LogoutButton />
-                </div>
-              </div>
-            </div>
-          </div>
           {children}
         </main>
       </div>
-      <MobileAdminNav />
     </div>
   );
 }
