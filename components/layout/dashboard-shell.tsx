@@ -13,8 +13,8 @@ interface DashboardShellProps {
 
 export function DashboardShell({ children, rightTop }: DashboardShellProps) {
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,_rgba(244,114,182,0.14),_transparent_35%),radial-gradient(circle_at_top_left,_rgba(253,186,116,0.12),_transparent_32%)]">
-      <div className="flex min-h-dvh flex-col overflow-hidden sm:hidden">
+    <div className="bg-[radial-gradient(circle_at_top_right,_rgba(244,114,182,0.14),_transparent_35%),radial-gradient(circle_at_top_left,_rgba(253,186,116,0.12),_transparent_32%)] sm:min-h-screen">
+      <div className="flex h-dvh flex-col overflow-hidden sm:hidden">
         <header className="shrink-0 border-b border-rose-100 bg-white/95 shadow-sm backdrop-blur">
           <div className="mx-auto w-full max-w-7xl px-4 py-4">
             <div className="flex items-center justify-between gap-3">
@@ -36,7 +36,7 @@ export function DashboardShell({ children, rightTop }: DashboardShellProps) {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto overscroll-contain">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [webkit-overflow-scrolling:touch]">
           <div className="mx-auto w-full max-w-7xl px-4 py-5">
             <main className="space-y-8 pb-24">
               {children}

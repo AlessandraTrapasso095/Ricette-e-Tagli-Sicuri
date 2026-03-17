@@ -15,8 +15,8 @@ interface AdminShellProps {
 
 export function AdminShell({ children }: AdminShellProps) {
   return (
-    <div className="min-h-screen bg-zinc-50">
-      <div className="flex min-h-dvh flex-col overflow-hidden lg:hidden">
+    <div className="bg-zinc-50 lg:min-h-screen">
+      <div className="flex h-dvh flex-col overflow-hidden lg:hidden">
         <header className="shrink-0 border-b border-zinc-200 bg-white/95 shadow-sm backdrop-blur">
           <div className="mx-auto w-full max-w-7xl px-3 py-4">
             <div className="rounded-3xl border border-zinc-200 bg-white p-3 shadow-sm">
@@ -41,7 +41,7 @@ export function AdminShell({ children }: AdminShellProps) {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto overscroll-contain">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [webkit-overflow-scrolling:touch]">
           <main className="mx-auto w-full max-w-7xl space-y-4 px-3 py-4 pb-24">
             {children}
           </main>
