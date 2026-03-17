@@ -92,7 +92,10 @@ export const businessRulesConfig = {
       "dolcificanti",
       "miele",
       "caramelle",
+      "funghi",
+      "mais",
       "popcorn",
+      "pop corn",
       "frutta secca intera",
       "chicchi duri",
     ],
@@ -195,9 +198,26 @@ export const businessRulesConfig = {
       "Includere sia proposte cremose/frullate del classico sia proposte morbide da autosvezzamento nei tagli sicuri.",
     ],
   },
+  mealAlternationGuidance: {
+    classico: [
+      "Per colazione e merenda alterna tra porridge, crema di riso o crema di latte con purea di frutta, yogurt con purea di frutta, budini di frutta o semolino, purea di frutta e frullati lisci.",
+      "Per pranzo alterna creme o pastine morbide con una sola proteina tra legumi decorticati, pesce, latticini freschi come ricotta o robiola, carne, sempre insieme a verdura ben cotta.",
+      "Per cena alterna purea, crema o vellutata con proteina, verdura e un carboidrato diverso dalla pasta.",
+    ],
+    autosvezzamento: [
+      "Per colazione e merenda alterna tra torte morbide, pancake, banana bread, budini di frutta, frullati, muffin morbidi e proposte simili senza zucchero, miele o sale.",
+      "Per pranzo alterna sempre primi piatti di pasta con legumi e verdura, pesce e verdura, latticini freschi e verdura, carne e verdura.",
+      "Per cena proponi sempre un pasto completo con verdura, carboidrato, proteina e grasso buono, alternando burger morbidi, polpette, cotolette, vellutate complete, sformati o proposte simili.",
+    ],
+    misto: [
+      "Nel misto alterna davvero il classico e l'autosvezzamento all'interno della stessa giornata.",
+      "Usa almeno un pasto cremoso del classico e almeno un pasto morbido da autosvezzamento nei tagli sicuri.",
+    ],
+  },
   hardSafetyRules: [
     "Non proporre alimenti esclusi per allergie o intolleranze.",
     "Non usare sale aggiunto, zucchero aggiunto, dolcificanti, miele o alimenti a rischio soffocamento.",
+    "Non proporre mai funghi, mais o pop corn.",
     "Usare consistenze e tagli coerenti con l'età del bambino.",
     "Evitare preparazioni con rischio di soffocamento senza note di sicurezza.",
     "Per pranzo e cena rispettare il piatto bilanciato.",

@@ -13,6 +13,7 @@ import { ensureUserHasChatAccess } from "@/server/chat/chat-access";
 import { extractCustomExclusions, normalizeFreeText } from "@/server/chat/input-normalizer";
 import { dailyMenuJsonSchema, dailyMenuSchema, type DailyMenuSchema } from "@/server/chat/menu-schema";
 import { buildProteinRotationHint, computeProteinWeeklyStats } from "@/server/chat/protein-rotation";
+import { chatRecipeCatalog, type ChatRecipe } from "@/server/chat/recipe-catalog";
 import { validateDailyMenu } from "@/server/chat/menu-validator";
 import {
   buildChildProfilePromptSummary,
@@ -138,6 +139,40 @@ async function getLatestAssistantMenuFromSession(params: {
   return parsed.data;
 }
 
+async function getLatestAssistantMenuForUser(params: {
+  admin: AdminClient;
+  userId: string;
+  dayStartIso: string;
+  excludeSessionId?: string;
+}) {
+  const { data, error } = await params.admin
+    .from("menu_messages")
+    .select("menu_payload, session_id")
+    .eq("user_id", params.userId)
+    .eq("role", "assistant")
+    .not("menu_payload", "is", null)
+    .gte("created_at", params.dayStartIso)
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  if (error || !data) {
+    return null;
+  }
+
+  for (const row of data) {
+    if (params.excludeSessionId && row.session_id === params.excludeSessionId) {
+      continue;
+    }
+
+    const parsed = dailyMenuSchema.safeParse(row.menu_payload);
+    if (parsed.success) {
+      return parsed.data;
+    }
+  }
+
+  return null;
+}
+
 function buildModificationPrompt(params: {
   userPrompt: string;
   previousMenu: DailyMenuSchema;
@@ -185,18 +220,6 @@ function hasExplicitModificationIntent(forced: ForcedMenuAdjustments) {
   );
 }
 
-function hasForbiddenTerm(text: string, forbiddenTerms: string[]) {
-  const normalized = normalizeFreeText(text);
-  return forbiddenTerms.some((term) => {
-    const normalizedTerm = normalizeFreeText(term);
-    return normalizedTerm.length > 0 && (normalized.includes(normalizedTerm) || normalizedTerm.includes(normalized));
-  });
-}
-
-function hasAnyForbiddenTerm(policy: MenuPolicyContext, candidates: string[]) {
-  return candidates.some((candidate) => hasForbiddenTerm(candidate, policy.forbiddenTerms));
-}
-
 function mergeForbiddenTerms(...groups: Array<string[] | undefined>) {
   const merged = new Set<string>();
 
@@ -210,43 +233,6 @@ function mergeForbiddenTerms(...groups: Array<string[] | undefined>) {
   }
 
   return [...merged];
-}
-
-function pickAllowedOption(options: string[], forbiddenTerms: string[], fallback: string, safeFallback = fallback) {
-  for (const option of options) {
-    if (!hasForbiddenTerm(option, forbiddenTerms)) {
-      return option;
-    }
-  }
-
-  if (!hasForbiddenTerm(fallback, forbiddenTerms)) {
-    return fallback;
-  }
-
-  return safeFallback;
-}
-
-function pickAllowedOptionExcluding(
-  options: string[],
-  forbiddenTerms: string[],
-  excludedTerms: string[],
-  fallback: string,
-  safeFallback = fallback,
-) {
-  const excludedKeys = new Set(excludedTerms.map((item) => normalizeFreeText(item)).filter(Boolean));
-
-  for (const option of options) {
-    const normalizedOption = normalizeFreeText(option);
-    if (excludedKeys.has(normalizedOption)) {
-      continue;
-    }
-
-    if (!hasForbiddenTerm(option, forbiddenTerms)) {
-      return option;
-    }
-  }
-
-  return pickAllowedOption(options, forbiddenTerms, fallback, safeFallback);
 }
 
 function getExpandedAvoidTerms(rawTerm: string) {
@@ -407,204 +393,570 @@ function getMealSignature(meal: DailyMenuSchema["meals"][number]) {
   return `${meal.mealType}:${normalizeFreeText(meal.dishName)}:${ingredients}`;
 }
 
+type ProteinGroup = "legumi" | "pesce" | "latticino" | "carne" | "uovo";
+
+interface BuiltMealMeta {
+  family: string;
+  fruit?: string;
+  carb?: string;
+  protein?: string;
+  vegetable?: string;
+  proteinGroup?: ProteinGroup;
+}
+
+interface BuiltMealResult {
+  meal: DailyMenuSchema["meals"][number];
+  meta: BuiltMealMeta;
+}
+
+const RECIPE_FAMILY_ALLOWLIST = {
+  classico: {
+    colazione: ["porridge", "crema-latte", "yogurt", "budino", "frullato"],
+    pranzo: ["pappa-classica", "pastina", "pasta", "riso", "quinoa", "cous-cous", "orzo"],
+    merenda: ["purea", "yogurt", "porridge", "frullato", "budino", "pancake", "muffin", "torta", "plumcake"],
+    cena: ["crema", "vellutata", "passato"],
+  },
+  autosvezzamento: {
+    colazione: ["pancake", "muffin", "waffle", "crepes", "toast", "porridge", "torta", "banana-bread", "budino"],
+    pranzo: ["pasta", "riso", "quinoa", "cous-cous", "polpette", "frittata"],
+    merenda: ["muffin", "pancake", "frullato", "yogurt", "biscotti", "ciambelline", "barrette", "budino", "banana-bread", "torta"],
+    cena: ["polpette", "burger", "frittata", "vellutata", "cotoletta", "sformatino"],
+  },
+} as const;
+
+function buildVariationSeed(...parts: Array<string | undefined>) {
+  return parts.filter(Boolean).join("|");
+}
+
+function hashSeed(input: string) {
+  let hash = 0;
+  for (let index = 0; index < input.length; index += 1) {
+    hash = (hash * 31 + input.charCodeAt(index)) >>> 0;
+  }
+  return hash;
+}
+
+function pickSeededValue<T>(values: T[], seed: string) {
+  if (values.length === 0) {
+    throw new Error("Nessuna opzione disponibile per la selezione del menu.");
+  }
+
+  return values[hashSeed(seed) % values.length];
+}
+
+function buildBalancedPlateLabels(policy: MenuPolicyContext, carb: string, protein: string, vegetable: string) {
+  return buildBalancedPlateForPolicy(policy, carb, protein, vegetable);
+}
+
+function getCatalogRecipes(style: "classico" | "autosvezzamento", mealType: MealType) {
+  return [...chatRecipeCatalog[style][mealType]];
+}
+
+function recipeToSearchText(recipe: ChatRecipe) {
+  return [
+    recipe.family,
+    recipe.dishName,
+    ...recipe.ingredients,
+    recipe.preparation,
+    ...recipe.notes,
+    ...recipe.safetyNotes,
+    ...recipe.substitutions,
+    recipe.meta.fruit ?? "",
+    recipe.meta.carb ?? "",
+    recipe.meta.protein ?? "",
+    recipe.meta.vegetable ?? "",
+  ].join(" ");
+}
+
+function recipeContainsAnyTerm(recipe: ChatRecipe, terms: string[]) {
+  return terms.some((term) => term && containsTermInText(recipeToSearchText(recipe), term));
+}
+
+function selectRecipeFromCatalog(params: {
+  style: "classico" | "autosvezzamento";
+  mealType: MealType;
+  seed: string;
+  forbiddenTerms: string[];
+  excludeFamilies?: string[];
+  excludeTerms?: string[];
+  disallowedProteinGroups?: ProteinGroup[];
+  preferredFamilies?: string[];
+  requireNonPastaCarb?: boolean;
+}) {
+  const allowedFamilies = RECIPE_FAMILY_ALLOWLIST[params.style][params.mealType] as readonly string[];
+  const allRecipes = getCatalogRecipes(params.style, params.mealType).filter((recipe) => allowedFamilies.includes(recipe.family));
+  const familyFilteredRecipes = allRecipes.filter((recipe) => !(params.excludeFamilies ?? []).includes(recipe.family));
+  const preferredRecipes =
+    params.preferredFamilies && params.preferredFamilies.length > 0
+      ? familyFilteredRecipes.filter((recipe) => params.preferredFamilies?.includes(recipe.family))
+      : familyFilteredRecipes;
+
+  const applyRecipeFilters = (
+    recipes: ChatRecipe[],
+    options?: {
+      ignoreExcludedTerms?: boolean;
+      ignoreDisallowedGroups?: boolean;
+    },
+  ) => {
+    return recipes.filter((recipe) => {
+      if (recipeContainsAnyTerm(recipe, params.forbiddenTerms)) {
+        return false;
+      }
+
+      if (params.requireNonPastaCarb && containsTermInText(recipe.meta.carb ?? "", "pasta")) {
+        return false;
+      }
+
+      if (!options?.ignoreDisallowedGroups && recipe.meta.proteinGroup && params.disallowedProteinGroups?.includes(recipe.meta.proteinGroup)) {
+        return false;
+      }
+
+      if (!options?.ignoreExcludedTerms && recipeContainsAnyTerm(recipe, params.excludeTerms ?? [])) {
+        return false;
+      }
+
+      return true;
+    });
+  };
+
+  const candidatePools = [
+    applyRecipeFilters(preferredRecipes),
+    applyRecipeFilters(familyFilteredRecipes),
+    applyRecipeFilters(preferredRecipes, { ignoreExcludedTerms: true }),
+    applyRecipeFilters(familyFilteredRecipes, { ignoreExcludedTerms: true }),
+    applyRecipeFilters(familyFilteredRecipes, { ignoreExcludedTerms: true, ignoreDisallowedGroups: true }),
+    applyRecipeFilters(allRecipes, { ignoreExcludedTerms: true, ignoreDisallowedGroups: true }),
+    allRecipes.filter((recipe) => !recipeContainsAnyTerm(recipe, params.forbiddenTerms)),
+    allRecipes,
+  ];
+
+  const selectedPool = candidatePools.find((pool) => pool.length > 0) ?? [];
+  return pickSeededValue(selectedPool, params.seed);
+}
+
+function buildMealFromRecipe(recipe: ChatRecipe, policy: MenuPolicyContext): BuiltMealResult {
+  return {
+    meal: {
+      mealType: recipe.mealType,
+      dishName: recipe.dishName,
+      ingredients: recipe.ingredients,
+      preparation: recipe.preparation,
+      notes: recipe.notes.slice(0, 5),
+      safetyNotes: recipe.safetyNotes.slice(0, 5),
+      substitutions: recipe.substitutions.slice(0, 4),
+      balancedPlate:
+        recipe.mealType === "pranzo" || recipe.mealType === "cena"
+          ? buildBalancedPlateLabels(policy, recipe.meta.carb ?? "carboidrato", recipe.meta.protein ?? "proteina", recipe.meta.vegetable ?? "verdura")
+          : undefined,
+    },
+    meta: {
+      family: recipe.family,
+      fruit: recipe.meta.fruit,
+      carb: recipe.meta.carb,
+      protein: recipe.meta.protein,
+      vegetable: recipe.meta.vegetable,
+      proteinGroup: recipe.meta.proteinGroup,
+    },
+  };
+}
+
+function buildClassicSweetMeal(params: {
+  mealType: "colazione" | "merenda";
+  policy: MenuPolicyContext;
+  seed: string;
+  forbiddenTerms: string[];
+  excludeFamilies?: string[];
+  excludeTerms?: string[];
+  preferredFamilies?: string[];
+}): BuiltMealResult {
+  return buildMealFromRecipe(
+    selectRecipeFromCatalog({
+      style: "classico",
+      mealType: params.mealType,
+      seed: buildVariationSeed(params.seed, params.mealType),
+      forbiddenTerms: params.forbiddenTerms,
+      excludeFamilies: params.excludeFamilies,
+      excludeTerms: params.excludeTerms,
+      preferredFamilies: params.preferredFamilies,
+    }),
+    params.policy,
+  );
+}
+
+function buildAutosvezzamentoSweetMeal(params: {
+  mealType: "colazione" | "merenda";
+  policy: MenuPolicyContext;
+  seed: string;
+  forbiddenTerms: string[];
+  excludeFamilies?: string[];
+  excludeTerms?: string[];
+  preferredFamilies?: string[];
+}): BuiltMealResult {
+  return buildMealFromRecipe(
+    selectRecipeFromCatalog({
+      style: "autosvezzamento",
+      mealType: params.mealType,
+      seed: buildVariationSeed(params.seed, params.mealType),
+      forbiddenTerms: params.forbiddenTerms,
+      excludeFamilies: params.excludeFamilies,
+      excludeTerms: params.excludeTerms,
+      preferredFamilies: params.preferredFamilies,
+    }),
+    params.policy,
+  );
+}
+
+function buildClassicoMainMeal(params: {
+  mealType: "pranzo" | "cena";
+  policy: MenuPolicyContext;
+  seed: string;
+  forbiddenTerms: string[];
+  excludeFamilies?: string[];
+  excludeTerms?: string[];
+  disallowedProteinGroups?: ProteinGroup[];
+  preferredFamilies?: string[];
+  requireNonPastaCarb?: boolean;
+}): BuiltMealResult {
+  return buildMealFromRecipe(
+    selectRecipeFromCatalog({
+      style: "classico",
+      mealType: params.mealType,
+      seed: buildVariationSeed(params.seed, params.mealType),
+      forbiddenTerms: params.forbiddenTerms,
+      excludeFamilies: params.excludeFamilies,
+      excludeTerms: params.excludeTerms,
+      disallowedProteinGroups: params.disallowedProteinGroups,
+      preferredFamilies: params.preferredFamilies,
+      requireNonPastaCarb: params.requireNonPastaCarb,
+    }),
+    params.policy,
+  );
+}
+
+function buildAutosvezzamentoLunchMeal(params: {
+  policy: MenuPolicyContext;
+  seed: string;
+  forbiddenTerms: string[];
+  excludeFamilies?: string[];
+  excludeTerms?: string[];
+  disallowedProteinGroups?: ProteinGroup[];
+  preferredFamilies?: string[];
+}): BuiltMealResult {
+  return buildMealFromRecipe(
+    selectRecipeFromCatalog({
+      style: "autosvezzamento",
+      mealType: "pranzo",
+      seed: buildVariationSeed(params.seed, "pranzo"),
+      forbiddenTerms: params.forbiddenTerms,
+      excludeFamilies: params.excludeFamilies,
+      excludeTerms: params.excludeTerms,
+      disallowedProteinGroups: params.disallowedProteinGroups,
+      preferredFamilies: params.preferredFamilies,
+    }),
+    params.policy,
+  );
+}
+
+function buildAutosvezzamentoDinnerMeal(params: {
+  policy: MenuPolicyContext;
+  seed: string;
+  forbiddenTerms: string[];
+  excludeFamilies?: string[];
+  excludeTerms?: string[];
+  disallowedProteinGroups?: ProteinGroup[];
+  preferredFamilies?: string[];
+}): BuiltMealResult {
+  return buildMealFromRecipe(
+    selectRecipeFromCatalog({
+      style: "autosvezzamento",
+      mealType: "cena",
+      seed: buildVariationSeed(params.seed, "cena"),
+      forbiddenTerms: params.forbiddenTerms,
+      excludeFamilies: params.excludeFamilies,
+      excludeTerms: params.excludeTerms,
+      disallowedProteinGroups: params.disallowedProteinGroups,
+      preferredFamilies: params.preferredFamilies,
+    }),
+    params.policy,
+  );
+}
+
+function buildFallbackMenuCandidate(params: {
+  childProfileSummary: DailyMenuSchema["childProfileSummary"];
+  policy: MenuPolicyContext;
+  seed: string;
+}): DailyMenuSchema {
+  const forbiddenTerms = params.policy.forbiddenTerms;
+  const style = params.policy.feedingStyle;
+  const title = "Menu giornaliero bilanciato";
+
+  let breakfast: BuiltMealResult;
+  let lunch: BuiltMealResult;
+  let snack: BuiltMealResult;
+  let dinner: BuiltMealResult;
+
+  if (style === "classico") {
+    breakfast = buildClassicSweetMeal({
+      mealType: "colazione",
+      policy: params.policy,
+      seed: buildVariationSeed(params.seed, "classico", "colazione"),
+      forbiddenTerms,
+    });
+    lunch = buildClassicoMainMeal({
+      mealType: "pranzo",
+      policy: params.policy,
+      seed: buildVariationSeed(params.seed, "classico", "pranzo"),
+      forbiddenTerms,
+    });
+    snack = buildClassicSweetMeal({
+      mealType: "merenda",
+      policy: params.policy,
+      seed: buildVariationSeed(params.seed, "classico", "merenda"),
+      forbiddenTerms,
+      excludeFamilies: [breakfast.meta.family],
+      excludeTerms: [breakfast.meta.fruit ?? ""],
+    });
+    dinner = buildClassicoMainMeal({
+      mealType: "cena",
+      policy: params.policy,
+      seed: buildVariationSeed(params.seed, "classico", "cena"),
+      forbiddenTerms,
+      excludeFamilies: [lunch.meta.family],
+      excludeTerms: [lunch.meta.carb ?? "", lunch.meta.protein ?? "", lunch.meta.vegetable ?? ""],
+      disallowedProteinGroups: lunch.meta.proteinGroup ? [lunch.meta.proteinGroup] : [],
+      requireNonPastaCarb: true,
+    });
+  } else if (style === "autosvezzamento") {
+    breakfast = buildAutosvezzamentoSweetMeal({
+      mealType: "colazione",
+      policy: params.policy,
+      seed: buildVariationSeed(params.seed, "auto", "colazione"),
+      forbiddenTerms,
+    });
+    lunch = buildAutosvezzamentoLunchMeal({
+      policy: params.policy,
+      seed: buildVariationSeed(params.seed, "auto", "pranzo"),
+      forbiddenTerms,
+    });
+    snack = buildAutosvezzamentoSweetMeal({
+      mealType: "merenda",
+      policy: params.policy,
+      seed: buildVariationSeed(params.seed, "auto", "merenda"),
+      forbiddenTerms,
+      excludeFamilies: [breakfast.meta.family],
+      excludeTerms: [breakfast.meta.fruit ?? ""],
+    });
+    dinner = buildAutosvezzamentoDinnerMeal({
+      policy: params.policy,
+      seed: buildVariationSeed(params.seed, "auto", "cena"),
+      forbiddenTerms,
+      excludeFamilies: [lunch.meta.family],
+      excludeTerms: [lunch.meta.carb ?? "", lunch.meta.protein ?? "", lunch.meta.vegetable ?? ""],
+      disallowedProteinGroups: lunch.meta.proteinGroup ? [lunch.meta.proteinGroup] : [],
+    });
+  } else {
+    const mistoPattern = pickSeededValue(["classico-auto", "auto-classico", "alternato"], buildVariationSeed(params.seed, "misto-pattern"));
+
+    if (mistoPattern === "auto-classico") {
+      breakfast = buildAutosvezzamentoSweetMeal({
+        mealType: "colazione",
+        policy: params.policy,
+        seed: buildVariationSeed(params.seed, "misto", "colazione"),
+        forbiddenTerms,
+      });
+      lunch = buildClassicoMainMeal({
+        mealType: "pranzo",
+        policy: params.policy,
+        seed: buildVariationSeed(params.seed, "misto", "pranzo"),
+        forbiddenTerms,
+      });
+      snack = buildClassicSweetMeal({
+        mealType: "merenda",
+        policy: params.policy,
+        seed: buildVariationSeed(params.seed, "misto", "merenda"),
+        forbiddenTerms,
+        excludeTerms: [breakfast.meta.fruit ?? ""],
+      });
+      dinner = buildAutosvezzamentoDinnerMeal({
+        policy: params.policy,
+        seed: buildVariationSeed(params.seed, "misto", "cena"),
+        forbiddenTerms,
+        excludeTerms: [lunch.meta.carb ?? "", lunch.meta.protein ?? "", lunch.meta.vegetable ?? ""],
+        disallowedProteinGroups: lunch.meta.proteinGroup ? [lunch.meta.proteinGroup] : [],
+      });
+    } else if (mistoPattern === "alternato") {
+      breakfast = buildClassicSweetMeal({
+        mealType: "colazione",
+        policy: params.policy,
+        seed: buildVariationSeed(params.seed, "misto", "colazione"),
+        forbiddenTerms,
+      });
+      lunch = buildAutosvezzamentoLunchMeal({
+        policy: params.policy,
+        seed: buildVariationSeed(params.seed, "misto", "pranzo"),
+        forbiddenTerms,
+      });
+      snack = buildAutosvezzamentoSweetMeal({
+        mealType: "merenda",
+        policy: params.policy,
+        seed: buildVariationSeed(params.seed, "misto", "merenda"),
+        forbiddenTerms,
+        excludeFamilies: [breakfast.meta.family],
+        excludeTerms: [breakfast.meta.fruit ?? ""],
+      });
+      dinner = buildClassicoMainMeal({
+        mealType: "cena",
+        policy: params.policy,
+        seed: buildVariationSeed(params.seed, "misto", "cena"),
+        forbiddenTerms,
+        excludeTerms: [lunch.meta.carb ?? "", lunch.meta.protein ?? "", lunch.meta.vegetable ?? ""],
+        disallowedProteinGroups: lunch.meta.proteinGroup ? [lunch.meta.proteinGroup] : [],
+      });
+    } else {
+      breakfast = buildClassicSweetMeal({
+        mealType: "colazione",
+        policy: params.policy,
+        seed: buildVariationSeed(params.seed, "misto", "colazione"),
+        forbiddenTerms,
+      });
+      lunch = buildClassicoMainMeal({
+        mealType: "pranzo",
+        policy: params.policy,
+        seed: buildVariationSeed(params.seed, "misto", "pranzo"),
+        forbiddenTerms,
+      });
+      snack = buildAutosvezzamentoSweetMeal({
+        mealType: "merenda",
+        policy: params.policy,
+        seed: buildVariationSeed(params.seed, "misto", "merenda"),
+        forbiddenTerms,
+        excludeTerms: [breakfast.meta.fruit ?? ""],
+      });
+      dinner = buildAutosvezzamentoDinnerMeal({
+        policy: params.policy,
+        seed: buildVariationSeed(params.seed, "misto", "cena"),
+        forbiddenTerms,
+        excludeTerms: [lunch.meta.carb ?? "", lunch.meta.protein ?? "", lunch.meta.vegetable ?? ""],
+        disallowedProteinGroups: lunch.meta.proteinGroup ? [lunch.meta.proteinGroup] : [],
+      });
+    }
+  }
+
+  return {
+    title,
+    childProfileSummary: params.childProfileSummary,
+    meals: [breakfast.meal, lunch.meal, snack.meal, dinner.meal],
+    dailyNotes: ["Offri acqua durante tutta la giornata e continua a variare frutta, verdure, cereali e proteine nella settimana."],
+    warnings: ["In caso di dubbi clinici confrontati con il pediatra."],
+    shoppingList: dedupeValues([breakfast, lunch, snack, dinner].flatMap((item) => item.meal.ingredients)),
+  };
+}
+
 function buildAlternativeMeal(params: {
   mealType: MealType;
   policy: MenuPolicyContext;
   requestedDish?: string;
   explicitAvoidTerms?: string[];
+  variationSeed?: string;
 }): DailyMenuSchema["meals"][number] {
   const forbiddenTerms = mergeForbiddenTerms(params.policy.forbiddenTerms, params.explicitAvoidTerms);
   const requestedDish = params.requestedDish ? cleanPromptTerm(params.requestedDish) : undefined;
   const requestedDishMode = getRequestedDishMode(requestedDish);
-  const prefersVellutata = requestedDishMode === "vellutata" || requestedDishMode === "crema";
-  const dairyForbidden = hasAnyForbiddenTerm({ ...params.policy, forbiddenTerms }, ["latticini", "latte", "yogurt", "ricotta", "formaggi"]);
+  const baseSeed = buildVariationSeed(params.variationSeed, params.mealType, requestedDish, forbiddenTerms.join(","));
 
-  if (params.mealType === "colazione") {
-    const fruit = pickAllowedOption(["Banana", "Mela", "Pera", "Prugna"], forbiddenTerms, "Banana", "Banana");
-    const liquidBase = dairyForbidden ? "120 ml acqua" : "120 ml latte o acqua";
+  if (params.mealType === "colazione" || params.mealType === "merenda") {
+    const useAutos =
+      params.policy.feedingStyle === "autosvezzamento" ||
+      (params.policy.feedingStyle === "misto" && requestedDishMode === "pancake");
+    const preferredFamilies =
+      requestedDishMode === "porridge"
+        ? ["porridge"]
+        : requestedDishMode === "yogurt"
+          ? ["yogurt"]
+          : requestedDishMode === "pancake"
+            ? ["pancake"]
+            : [];
 
-    if (requestedDishMode === "yogurt" && !dairyForbidden) {
-      return {
-        mealType: "colazione",
-        dishName: `Yogurt con ${fruit.toLowerCase()} e avena morbida`,
-        ingredients: ["80 g yogurt bianco intero", `40 g ${fruit.toLowerCase()} cotta o schiacciata`, "10 g fiocchi di avena morbidi"],
-        preparation: `Metti lo yogurt in una ciotola. Aggiungi ${fruit.toLowerCase()} già cotta o schiacciata e completa con i fiocchi di avena ammorbiditi per qualche minuto, così la consistenza resta morbida e semplice da offrire.`,
-        notes: ["Colazione fresca, semplice e senza zuccheri aggiunti."],
-        safetyNotes: ["Servi con consistenza morbida e uniforme."],
-        substitutions: ["Puoi sostituire la frutta con altra frutta morbida già introdotta."],
-      };
-    }
+    const built = useAutos
+      ? buildAutosvezzamentoSweetMeal({
+          mealType: params.mealType,
+          policy: params.policy,
+          seed: baseSeed,
+          forbiddenTerms,
+          preferredFamilies,
+        })
+      : buildClassicSweetMeal({
+          mealType: params.mealType,
+          policy: params.policy,
+          seed: baseSeed,
+          forbiddenTerms,
+          preferredFamilies,
+        });
 
-    if (requestedDishMode === "pancake" && params.policy.feedingStyle !== "classico") {
-      return {
-        mealType: "colazione",
-        dishName: `Pancake morbido con ${fruit.toLowerCase()}`,
-        ingredients: dairyForbidden
-          ? ["20 g farina di avena", "40 g banana schiacciata", "20 ml acqua", `30 g ${fruit.toLowerCase()} schiacciata`]
-          : ["20 g farina di avena", "40 g banana schiacciata", "20 g yogurt bianco", `30 g ${fruit.toLowerCase()} schiacciata`],
-        preparation: `Mescola gli ingredienti fino a ottenere una pastella morbida. Cuoci un piccolo pancake in padella antiaderente a fuoco dolce, poi servi con ${fruit.toLowerCase()} schiacciata sopra o accanto in consistenza morbida.`,
-        notes: ["Adatto ad autosvezzamento o misto se offerto morbido."],
-        safetyNotes: ["Offri sempre in pezzi morbidi e nei tagli sicuri adeguati."],
-        substitutions: ["Puoi sostituire la frutta con mela cotta o altra frutta morbida."],
-      };
-    }
-
-    const dishName = `Porridge morbido con ${fruit.toLowerCase()}`;
-
-    return {
-      mealType: "colazione",
-      dishName,
-      ingredients: [`20 g fiocchi di avena`, liquidBase, `40 g ${fruit.toLowerCase()} cotta o schiacciata`],
-      preparation: `Versa i fiocchi di avena in un pentolino con ${dairyForbidden ? "l'acqua" : "latte o acqua"}, cuoci a fuoco dolce per 5-6 minuti mescolando fino a ottenere una crema morbida. Aggiungi ${fruit.toLowerCase()} ben cotta o schiacciata e servi tiepido.`,
-      notes: ["Colazione semplice e nutriente, senza zucchero aggiunto."],
-      safetyNotes: ["Servi tiepido e con consistenza morbida."],
-      substitutions: ["Puoi usare altra frutta morbida di stagione."],
-    };
+    return built.meal;
   }
 
-  if (params.mealType === "merenda") {
-    const fruit = pickAllowedOption(["Banana", "Mela cotta", "Pera", "Prugna"], forbiddenTerms, "Banana", "Banana");
-
-    if (requestedDishMode === "pane" && params.policy.feedingStyle !== "classico") {
-      return {
-        mealType: "merenda",
-        dishName: "Pane morbido con crema e frutta",
-        ingredients: ["1 fetta di pane morbido", "20 g crema di legumi decorticati", `30 g ${fruit.toLowerCase()} schiacciata`],
-        preparation: `Spalma la crema di legumi sul pane morbido in strato sottile. Accompagna con ${fruit.toLowerCase()} schiacciata o spalmata, mantenendo una consistenza semplice e sicura da offrire.`,
-        notes: ["Merenda pratica per autosvezzamento o misto."],
-        safetyNotes: ["Pane sempre morbido e offerto in forma sicura."],
-        substitutions: ["Puoi sostituire il pane con un pancake morbido."],
-      };
+  if (params.mealType === "pranzo") {
+    if (requestedDishMode === "pasta" || params.policy.feedingStyle === "autosvezzamento") {
+      return buildAutosvezzamentoLunchMeal({
+        policy: params.policy,
+        seed: baseSeed,
+        forbiddenTerms,
+        preferredFamilies: requestedDishMode === "pasta" ? ["pasta"] : requestedDishMode === "riso" ? ["riso"] : [],
+      }).meal;
     }
 
-    if (requestedDishMode === "yogurt" && !dairyForbidden) {
-      return {
-        mealType: "merenda",
-        dishName: "Merenda yogurt e frutta morbida",
-        ingredients: ["80 g yogurt bianco intero", `40 g ${fruit.toLowerCase()} cotta o schiacciata`],
-        preparation: `Unisci lo yogurt con ${fruit.toLowerCase()} già cotta o schiacciata fino a ottenere una consistenza omogenea e morbida.`,
-        notes: ["Merenda fresca e naturale."],
-        safetyNotes: ["Controlla che la frutta sia ben morbida."],
-        substitutions: ["Puoi usare altra frutta morbida di stagione."],
-      };
-    }
-
-    const dishName = dairyForbidden ? "Merenda di frutta morbida e porridge" : "Merenda yogurt e frutta morbida";
-
-    return {
-      mealType: "merenda",
-      dishName,
-      ingredients: dairyForbidden
-        ? [`15 g fiocchi di avena`, `100 ml acqua`, `40 g ${fruit.toLowerCase()} cotta o schiacciata`]
-        : [`80 g yogurt bianco intero`, `40 g ${fruit.toLowerCase()} cotta o schiacciata`],
-      preparation: dairyForbidden
-        ? `Cuoci i fiocchi di avena con l'acqua fino a ottenere un porridge morbido. Aggiungi ${fruit.toLowerCase()} cotta o schiacciata e mescola fino a ottenere una consistenza omogenea.`
-        : `Unisci lo yogurt con ${fruit.toLowerCase()} cotta o schiacciata fino a ottenere una consistenza omogenea e morbida.`,
-      notes: ["Merenda leggera, naturale e senza zuccheri aggiunti."],
-      safetyNotes: ["Controlla che non ci siano pezzi duri."],
-      substitutions: dairyForbidden
-        ? ["Puoi usare anche purea di frutta morbida con porridge semplice."]
-        : ["In alternativa yogurt con altra frutta morbida di stagione."],
-    };
+    return buildClassicoMainMeal({
+      mealType: "pranzo",
+      policy: params.policy,
+      seed: baseSeed,
+      forbiddenTerms,
+      preferredFamilies:
+        requestedDishMode === "pastina"
+          ? ["pastina"]
+          : requestedDishMode === "riso"
+            ? ["riso"]
+            : [],
+    }).meal;
   }
 
-  const carb = pickAllowedOption(
-    params.mealType === "pranzo" ? ["Riso", "Pasta formato piccolo", "Miglio"] : ["Patata", "Orzo", "Pasta corta"],
+  const useAutosDinner =
+    params.policy.feedingStyle === "autosvezzamento" ||
+    (params.policy.feedingStyle === "misto" && !["vellutata", "crema", "pappa", "pastina", "riso"].includes(requestedDishMode));
+
+  if (useAutosDinner) {
+    const preferredFamilies =
+      requestedDishMode === "burger"
+        ? ["burger"]
+        : requestedDishMode === "polpette"
+          ? ["polpette"]
+          : requestedDishMode === "vellutata" || requestedDishMode === "crema"
+            ? ["vellutata"]
+            : [];
+
+    return buildAutosvezzamentoDinnerMeal({
+      policy: params.policy,
+      seed: baseSeed,
+      forbiddenTerms,
+      preferredFamilies,
+    }).meal;
+  }
+
+  return buildClassicoMainMeal({
+    mealType: "cena",
+    policy: params.policy,
+    seed: baseSeed,
     forbiddenTerms,
-    "Riso",
-    "Miglio",
-  );
-  const protein = pickAllowedOption(
-    ["Tacchino", "Lenticchie decorticate", "Ceci decorticati", "Ricotta vaccina", "Merluzzo"],
-    forbiddenTerms,
-    "Lenticchie decorticate",
-    "Ceci decorticati",
-  );
-  const vegetable = pickAllowedOption(["Zucca", "Carota", "Piselli", "Zucchine", "Broccoli"], forbiddenTerms, "Zucca", "Carota");
-
-  if ((requestedDishMode === "burger" || requestedDishMode === "polpette") && params.policy.feedingStyle !== "classico") {
-    const isBurger = requestedDishMode === "burger";
-    return {
-      mealType: params.mealType,
-      dishName: isBurger
-        ? `Burger morbido di ${protein.toLowerCase()} con ${carb.toLowerCase()} e ${vegetable.toLowerCase()}`
-        : `Polpette morbide di ${protein.toLowerCase()} con ${carb.toLowerCase()} e ${vegetable.toLowerCase()}`,
-      ingredients: [`40 g ${protein.toLowerCase()}`, `20 g ${vegetable.toLowerCase()} cotta nell'impasto`, `60 g ${carb.toLowerCase()}`, `40 g ${vegetable.toLowerCase()} cotta come contorno`, "1 cucchiaino olio EVO a crudo"],
-      preparation: `Cuoci ${vegetable.toLowerCase()} fino a renderla morbida. Schiaccia o trita ${protein.toLowerCase()}, uniscila a parte della verdura e forma ${isBurger ? "un burger soffice" : "polpette molto morbide"}. Cuoci finché il composto resta morbido, poi servi con ${carb.toLowerCase()} ben cotto e la restante verdura. Completa con olio EVO a crudo.`,
-      notes: ["Preparazione morbida e realistica per autosvezzamento o misto."],
-      safetyNotes: ["Offrire sempre nei tagli sicuri adeguati all'età del bambino."],
-      substitutions: [isBurger ? "Puoi trasformarlo in polpette morbide con lo stesso impasto." : "Puoi sostituire con un burger morbido dello stesso impasto."],
-      balancedPlate: {
-        carbs: params.policy.ageMonths !== null && params.policy.ageMonths >= 24 ? `1/4 ${carb.toLowerCase()}` : `2/4 ${carb.toLowerCase()}`,
-        proteins: `1/4 ${protein.toLowerCase()}`,
-        vegetables:
-          params.policy.ageMonths !== null && params.policy.ageMonths >= 24 ? `2/4 ${vegetable.toLowerCase()}` : `1/4 ${vegetable.toLowerCase()}`,
-        healthyFats: "olio EVO a crudo",
-      },
-    };
-  }
-
-  if (requestedDishMode === "pasta" || requestedDishMode === "riso" || requestedDishMode === "pastina") {
-    const selectedCarb =
-      requestedDishMode === "pasta"
-        ? pickAllowedOption(["Pasta formato piccolo", "Pasta corta", "Miglio"], forbiddenTerms, carb, "Miglio")
-        : requestedDishMode === "riso"
-          ? pickAllowedOption(["Riso", "Baby riso", "Miglio"], forbiddenTerms, carb, "Miglio")
-          : pickAllowedOption(["Pastina", "Baby riso", "Semolino"], forbiddenTerms, carb, "Semolino");
-    const makeClassico = params.policy.feedingStyle === "classico" || requestedDishMode === "pastina";
-
-    return {
-      mealType: params.mealType,
-      dishName: makeClassico
-        ? `${selectedCarb} cremosa con ${vegetable.toLowerCase()} e ${protein.toLowerCase()}`
-        : `${selectedCarb} morbida con ${protein.toLowerCase()} e ${vegetable.toLowerCase()}`,
-      ingredients: [`25 g ${selectedCarb.toLowerCase()}`, `30 g ${protein.toLowerCase()}`, `60 g ${vegetable.toLowerCase()} cotta`, "1 cucchiaino olio EVO a crudo"],
-      preparation: makeClassico
-        ? `Cuoci ${selectedCarb.toLowerCase()} e ${vegetable.toLowerCase()} fino a renderli molto morbidi. Unisci ${protein.toLowerCase()} e frulla o schiaccia bene fino a ottenere una consistenza cremosa. Completa con olio EVO a crudo.`
-        : `Cuoci ${selectedCarb.toLowerCase()} fino a renderla ben morbida. Unisci ${protein.toLowerCase()} in consistenza soffice e ${vegetable.toLowerCase()} ben cotta, poi servi tutto in forma morbida e semplice da gestire. Completa con olio EVO a crudo.`,
-      notes: [makeClassico ? "Consistenza cremosa e omogenea." : "Piatto morbido e bilanciato."],
-      safetyNotes: [makeClassico ? "Evita pezzi o consistenze troppo dense." : "Offri in consistenza morbida e adatta all'età."],
-      substitutions: ["Puoi sostituire la verdura con altra verdura di stagione."],
-      balancedPlate: {
-        carbs: params.policy.ageMonths !== null && params.policy.ageMonths >= 24 ? `1/4 ${selectedCarb.toLowerCase()}` : `2/4 ${selectedCarb.toLowerCase()}`,
-        proteins: `1/4 ${protein.toLowerCase()}`,
-        vegetables:
-          params.policy.ageMonths !== null && params.policy.ageMonths >= 24 ? `2/4 ${vegetable.toLowerCase()}` : `1/4 ${vegetable.toLowerCase()}`,
-        healthyFats: "olio EVO a crudo",
-      },
-    };
-  }
-
-  const makeClassico = params.policy.feedingStyle === "classico" || prefersVellutata || requestedDishMode === "pappa";
-  const makeAuto = params.policy.feedingStyle === "autosvezzamento";
-  const dishName = makeClassico
-    ? `Vellutata di ${vegetable.toLowerCase()} con ${protein.toLowerCase()} e ${carb.toLowerCase()}`
-    : `Piatto morbido di ${carb.toLowerCase()} con ${protein.toLowerCase()} e ${vegetable.toLowerCase()}`;
-
-  return {
-    mealType: params.mealType,
-    dishName,
-    ingredients: [`25 g ${carb.toLowerCase()}`, `30 g ${protein.toLowerCase()}`, `60 g ${vegetable.toLowerCase()} cotta`, `1 cucchiaino olio EVO a crudo`],
-    preparation: makeClassico
-      ? `Cuoci ${carb.toLowerCase()} e ${vegetable.toLowerCase()} fino a renderli molto morbidi. Unisci ${protein.toLowerCase()} e frulla o schiaccia bene fino a ottenere una crema liscia, completando con olio EVO a crudo.`
-      : `Cuoci ${carb.toLowerCase()} e ${vegetable.toLowerCase()} fino a renderli morbidi. Prepara ${protein.toLowerCase()} in consistenza soffice, uniscilo al piatto e servi tutto in forma morbida e nei tagli sicuri adeguati, completando con olio EVO a crudo.`,
-    notes: [
-      "Completa con olio EVO a crudo.",
-      makeAuto ? "Forma e servizio in tagli sicuri/finger food." : "Consistenza morbida e facilmente gestibile.",
-    ],
-    safetyNotes: [
-      "Bambino seduto, schiena dritta e supervisione adulta.",
-      makeAuto ? "Tagli sicuri adeguati all'età." : "Evita pezzi duri o di grande dimensione.",
-    ],
-    substitutions: ["Puoi sostituire la verdura con altra verdura di stagione."],
-    balancedPlate: {
-      carbs: params.policy.ageMonths !== null && params.policy.ageMonths >= 24 ? `1/4 ${carb.toLowerCase()}` : `2/4 ${carb.toLowerCase()}`,
-      proteins: `1/4 ${protein.toLowerCase()}`,
-      vegetables:
-        params.policy.ageMonths !== null && params.policy.ageMonths >= 24 ? `2/4 ${vegetable.toLowerCase()}` : `1/4 ${vegetable.toLowerCase()}`,
-      healthyFats: "olio EVO a crudo",
-    },
-  };
+    preferredFamilies:
+      requestedDishMode === "vellutata"
+        ? ["vellutata"]
+        : requestedDishMode === "crema"
+          ? ["crema"]
+          : requestedDishMode === "pappa"
+            ? ["passato"]
+            : [],
+    requireNonPastaCarb: true,
+  }).meal;
 }
 
 function getForcedMenuAdjustments(userPrompt: string): ForcedMenuAdjustments {
@@ -694,7 +1046,11 @@ function getForcedMenuAdjustments(userPrompt: string): ForcedMenuAdjustments {
   };
 }
 
-function sanitizeMenuAgainstForbiddenTerms(menu: DailyMenuSchema, policy: MenuPolicyContext): DailyMenuSchema {
+function sanitizeMenuAgainstForbiddenTerms(
+  menu: DailyMenuSchema,
+  policy: MenuPolicyContext,
+  variationSeed?: string,
+): DailyMenuSchema {
   let replacedMeals = false;
 
   const meals = menu.meals.map((meal) => {
@@ -708,6 +1064,7 @@ function sanitizeMenuAgainstForbiddenTerms(menu: DailyMenuSchema, policy: MenuPo
       mealType: meal.mealType,
       policy,
       explicitAvoidTerms: matchedForbiddenTerms,
+      variationSeed: buildVariationSeed(variationSeed, meal.mealType, matchedForbiddenTerms.join(",")),
     });
   });
 
@@ -745,7 +1102,11 @@ function extractRepeatedMealTerms(firstMeal: DailyMenuSchema["meals"][number], s
   return [...new Set(keywords.filter((keyword) => firstText.includes(keyword) && secondText.includes(keyword)))];
 }
 
-function enforceDailyMealVariety(menu: DailyMenuSchema, policy: MenuPolicyContext): DailyMenuSchema {
+function enforceDailyMealVariety(
+  menu: DailyMenuSchema,
+  policy: MenuPolicyContext,
+  variationSeed?: string,
+): DailyMenuSchema {
   const meals = [...menu.meals];
   const warnings = [...menu.warnings];
 
@@ -758,6 +1119,7 @@ function enforceDailyMealVariety(menu: DailyMenuSchema, policy: MenuPolicyContex
         mealType: "merenda",
         policy,
         explicitAvoidTerms: mergeForbiddenTerms(policy.forbiddenTerms, repeated),
+        variationSeed: buildVariationSeed(variationSeed, "merenda", repeated.join(",")),
       });
       warnings.push(`Merenda variata automaticamente per evitare ripetizioni con la colazione (${repeated.join(", ")}).`);
     }
@@ -772,6 +1134,7 @@ function enforceDailyMealVariety(menu: DailyMenuSchema, policy: MenuPolicyContex
         mealType: "cena",
         policy,
         explicitAvoidTerms: mergeForbiddenTerms(policy.forbiddenTerms, repeated),
+        variationSeed: buildVariationSeed(variationSeed, "cena", repeated.join(",")),
       });
       warnings.push(`Cena variata automaticamente per evitare ripetizioni con il pranzo (${repeated.join(", ")}).`);
     }
@@ -790,6 +1153,7 @@ function applyForcedAdjustments(
   policy: MenuPolicyContext,
   forced: ForcedMenuAdjustments,
   previousMenu?: DailyMenuSchema,
+  variationSeed?: string,
 ): DailyMenuSchema {
   let meals = menu.meals.map((meal) => applyReplacementsToMeal(meal, forced.replacements));
   const warnings: string[] = [...menu.warnings];
@@ -810,6 +1174,7 @@ function applyForcedAdjustments(
         policy,
         requestedDish: mealChange.requestedDish,
         explicitAvoidTerms: policy.forbiddenTerms,
+        variationSeed: buildVariationSeed(variationSeed, mealChange.mealType, "requested"),
       });
       warnings.push(`Pasto ${mealChange.mealType} aggiornato con richiesta: ${mealChange.requestedDish}.`);
     }
@@ -820,6 +1185,7 @@ function applyForcedAdjustments(
         policy,
         requestedDish: mealChange.requestedDish,
         explicitAvoidTerms: policy.forbiddenTerms,
+        variationSeed: buildVariationSeed(variationSeed, mealChange.mealType, "previous"),
       });
       warnings.push(`Pasto ${mealChange.mealType} rigenerato con una variante alternativa.`);
     }
@@ -844,6 +1210,7 @@ function applyForcedAdjustments(
         mealType: meal.mealType,
         policy,
         explicitAvoidTerms: mergeForbiddenTerms(policy.forbiddenTerms, matchedTerms),
+        variationSeed: buildVariationSeed(variationSeed, meal.mealType, avoidTerm),
       });
     });
 
@@ -859,6 +1226,7 @@ function applyForcedAdjustments(
         policy,
         requestedDish: forced.mealChanges[0]?.requestedDish,
         explicitAvoidTerms: policy.forbiddenTerms,
+        variationSeed: buildVariationSeed(variationSeed, targetMeal, "variation"),
       });
       warnings.push(`Menu variato automaticamente sul pasto ${targetMeal}.`);
     }
@@ -871,7 +1239,7 @@ function applyForcedAdjustments(
     warnings: dedupeValues(warnings),
   };
 
-  return enforceDailyMealVariety(sanitizeMenuAgainstForbiddenTerms(adjustedMenu, policy), policy);
+  return enforceDailyMealVariety(sanitizeMenuAgainstForbiddenTerms(adjustedMenu, policy, variationSeed), policy, variationSeed);
 }
 
 function evaluateForcedAdjustments(
@@ -961,309 +1329,59 @@ function fallbackMenu(
     previousMenu?: DailyMenuSchema;
     isModification?: boolean;
     forcedAdjustments?: ForcedMenuAdjustments;
+    variationSeed?: string;
   },
 ): DailyMenuSchema {
   const issues = options?.issues ?? [];
-  const isModification = options?.isModification ?? false;
-  const dairyForbidden = hasAnyForbiddenTerm(policy, ["latticini", "latte", "yogurt", "ricotta", "formaggi"]);
-  const breakfastFruit = pickAllowedOption(
-    isModification ? ["banana", "mela", "pera"] : ["mela", "banana", "pera"],
-    policy.forbiddenTerms,
-    "banana",
-    "Banana",
-  );
-  const snackFruit = pickAllowedOptionExcluding(
-    isModification ? ["banana", "mela cotta", "pera"] : ["mela cotta", "banana", "pera"],
-    policy.forbiddenTerms,
-    [breakfastFruit],
-    "mela cotta",
-    "banana",
-  );
-  const classicLunchCarb = pickAllowedOption(
-    isModification ? ["baby riso", "pastina", "semolino"] : ["pastina", "baby riso", "semolino"],
-    policy.forbiddenTerms,
-    "baby riso",
-    "miglio",
-  );
-  const classicDinnerCarb = pickAllowedOption(
-    isModification ? ["pastina", "baby riso", "semolino"] : ["semolino", "pastina", "baby riso"],
-    policy.forbiddenTerms,
-    "pastina",
-    "semolino",
-  );
-  const classicLunchProtein = pickAllowedOption(
-    isModification ? ["lenticchie decorticate", "ricotta fresca"] : ["ricotta fresca", "lenticchie decorticate"],
-    policy.forbiddenTerms,
-    "lenticchie decorticate",
-    "ceci decorticati",
-  );
-  const classicDinnerProtein = pickAllowedOption(
-    isModification ? ["ceci decorticati", "ricotta fresca"] : ["ceci decorticati", "ricotta fresca"],
-    policy.forbiddenTerms,
-    "ceci decorticati",
-    "lenticchie decorticate",
-  );
-  const autoLunchProtein = pickAllowedOption(
-    isModification ? ["tacchino", "ceci decorticati", "merluzzo"] : ["tacchino", "merluzzo", "ceci decorticati"],
-    policy.forbiddenTerms,
-    "tacchino",
-    "merluzzo",
-  );
-  const autoDinnerProtein = pickAllowedOption(
-    isModification ? ["ceci decorticati", "tacchino", "merluzzo"] : ["ceci decorticati", "tacchino", "merluzzo"],
-    policy.forbiddenTerms,
-    "ceci decorticati",
-    "tacchino",
-  );
-  const classicLunchVegetable = pickAllowedOption(
-    isModification ? ["zucca", "carota", "zucchine"] : ["zucchine", "zucca", "carota"],
-    policy.forbiddenTerms,
-    "zucchine",
-    "zucca",
-  );
-  const classicDinnerVegetable = pickAllowedOption(
-    isModification ? ["carota", "piselli", "zucca"] : ["carota", "zucca", "piselli"],
-    policy.forbiddenTerms,
-    "carota",
-    "piselli",
-  );
-  const autoLunchVegetable = pickAllowedOption(
-    isModification ? ["zucchine", "carota", "zucca"] : ["zucchine", "carota", "zucca"],
-    policy.forbiddenTerms,
-    "zucchine",
-    "carota",
-  );
-  const autoDinnerVegetable = pickAllowedOption(
-    isModification ? ["zucca", "carota", "zucchine"] : ["zucca", "carota", "zucchine"],
-    policy.forbiddenTerms,
-    "zucca",
-    "broccoli",
-  );
-  const autoLunchCarb = pickAllowedOption(
-    isModification ? ["pasta corta", "riso", "patata"] : ["pasta corta", "patata", "riso"],
-    policy.forbiddenTerms,
-    "pasta corta",
-    "riso",
-  );
-  const autoDinnerCarb = pickAllowedOption(
-    isModification ? ["cous cous", "patata", "pasta corta"] : ["cous cous", "patata", "pasta corta"],
-    policy.forbiddenTerms,
-    "patata",
-    "orzo",
-  );
-
   const warnings = ["In caso di dubbi clinici confrontati con il pediatra."];
   if (policy.ageStage === "under_6") {
     warnings.push("Prima dei 6 mesi il latte resta centrale: valuta con il pediatra quando iniziare lo svezzamento.");
   }
   if (issues.length > 0) {
-    warnings.push("Menu generato con fallback sicuro per garantire il rispetto delle regole della piattaforma.");
+    warnings.push("Menu rigenerato con fallback strutturato per rispettare tutte le regole della piattaforma.");
   }
-  if (isModification) {
+  if (options?.isModification) {
     warnings.push("Menu aggiornato in base alla tua richiesta di modifica.");
   }
 
-  const classicoMenu: DailyMenuSchema = {
-    title: "Menu giornaliero bilanciato",
-    childProfileSummary,
-    meals: [
-      {
-        mealType: "colazione",
-        dishName: `Porridge morbido con ${breakfastFruit}`,
-        ingredients: [`20 g fiocchi di avena`, dairyForbidden ? `120 ml acqua` : `120 ml latte o acqua`, `40 g ${breakfastFruit} cotta o schiacciata`],
-        preparation: `Versa i fiocchi di avena in un pentolino con ${dairyForbidden ? "l'acqua" : "latte o acqua"}, cuoci a fuoco dolce per 5-6 minuti mescolando fino a ottenere una crema morbida. Aggiungi la ${breakfastFruit} cotta o schiacciata e servi tiepido.`,
-        notes: ["Consistenza morbida e cremosa."],
-        safetyNotes: ["Servire tiepido e senza pezzi grandi."],
-        substitutions: ["Sostituisci la frutta con altra frutta morbida di stagione."],
-      },
-      {
-        mealType: "pranzo",
-        dishName: `Crema di ${classicLunchCarb} con ${classicLunchVegetable} e ${classicLunchProtein}`,
-        ingredients: [`25 g ${classicLunchCarb}`, `150 ml brodo vegetale leggero`, `60 g ${classicLunchVegetable} cotta`, `30 g ${classicLunchProtein}`, `1 cucchiaino olio EVO a crudo`],
-        preparation: `Cuoci ${classicLunchVegetable} finche molto morbida. Cuoci ${classicLunchCarb} nel brodo vegetale, unisci ${classicLunchProtein} e frulla tutto con la verdura fino a ottenere una crema liscia. Completa con olio EVO a crudo.`,
-        notes: ["Preparazione morbida, fluida e omogenea."],
-        safetyNotes: ["Nessun pezzo intero o consistenza densa."],
-        substitutions: ["Puoi sostituire la verdura con un'altra verdura ben cotta e frullata."],
-        balancedPlate: buildBalancedPlateForPolicy(policy, classicLunchCarb, classicLunchProtein, classicLunchVegetable),
-      },
-      {
-        mealType: "merenda",
-        dishName: dairyForbidden ? `Porridge morbido con purea di ${snackFruit}` : `Yogurt bianco con purea di ${snackFruit}`,
-        ingredients: dairyForbidden
-          ? [`15 g fiocchi di avena`, `100 ml acqua`, `40 g ${snackFruit} cotta o schiacciata`]
-          : [`80 g yogurt bianco intero`, `40 g ${snackFruit} cotta o schiacciata`],
-        preparation: dairyForbidden
-          ? `Cuoci i fiocchi di avena con l'acqua fino a ottenere un porridge morbido. Aggiungi la ${snackFruit} gia cotta o schiacciata e mescola fino a rendere la consistenza uniforme.`
-          : `Metti lo yogurt in una ciotola, aggiungi la ${snackFruit} gia cotta o schiacciata e mescola fino a ottenere una consistenza uniforme e morbida.`,
-        notes: ["Merenda semplice e cremosa."],
-        safetyNotes: ["Servire senza pezzi grossi o consistenze dense."],
-        substitutions: ["Puoi usare altra frutta morbida ben schiacciata."],
-      },
-      {
-        mealType: "cena",
-        dishName: `Pastina cremosa con ${classicDinnerVegetable} e ${classicDinnerProtein}`,
-        ingredients: [`25 g ${classicDinnerCarb}`, `150 ml brodo vegetale leggero`, `60 g ${classicDinnerVegetable} cotta`, `30 g ${classicDinnerProtein}`, `1 cucchiaino olio EVO a crudo`],
-        preparation: `Cuoci ${classicDinnerVegetable} finche morbida. Porta a cottura ${classicDinnerCarb} nel brodo, aggiungi ${classicDinnerProtein} e la verdura, poi frulla o schiaccia fino a ottenere una crema fluida. Completa con olio EVO a crudo.`,
-        notes: ["Consistenza classica, morbida e omogenea."],
-        safetyNotes: ["No pezzi, no composti densi, no formati grandi."],
-        substitutions: [
-          dairyForbidden
-            ? "Puoi sostituire i legumi con un'altra purea di legumi decorticati gia introdotti."
-            : "Puoi sostituire i legumi con ricotta fresca se gia introdotta.",
-        ],
-        balancedPlate: buildBalancedPlateForPolicy(policy, classicDinnerCarb, classicDinnerProtein, classicDinnerVegetable),
-      },
-    ],
-    dailyNotes: ["Offri acqua durante tutta la giornata."],
-    warnings,
-    shoppingList: [
-      "fiocchi di avena",
-      breakfastFruit,
-      classicLunchCarb,
-      classicLunchVegetable,
-      classicLunchProtein,
-      ...(dairyForbidden ? [] : ["yogurt bianco intero"]),
-      classicDinnerCarb,
-      classicDinnerVegetable,
-      classicDinnerProtein,
-    ],
-  };
+  const baseSeed = options?.variationSeed ?? buildVariationSeed(policy.feedingStyle, String(policy.ageMonths ?? "na"), options?.isModification ? "mod" : "new");
 
-  const autosvezzamentoMenu: DailyMenuSchema = {
-    title: "Menu giornaliero bilanciato",
-    childProfileSummary,
-    meals: [
-      {
-        mealType: "colazione",
-        dishName: `Porridge con ${breakfastFruit} morbida`,
-        ingredients: [`20 g fiocchi di avena`, dairyForbidden ? `120 ml acqua` : `120 ml latte o acqua`, `40 g ${breakfastFruit} schiacciata`],
-        preparation: `Cuoci i fiocchi di avena con ${dairyForbidden ? "l'acqua" : "latte o acqua"} finche diventano morbidi e cremosi. Aggiungi la ${breakfastFruit} schiacciata e servi tiepido in una consistenza facile da raccogliere con il cucchiaio.`,
-        notes: ["Colazione morbida e facile da offrire in autonomia assistita."],
-        safetyNotes: ["Offrire sempre nei tagli sicuri adeguati all'eta del bambino."],
-        substitutions: ["Puoi sostituire la frutta con altra frutta morbida ben matura."],
-      },
-      {
-        mealType: "pranzo",
-        dishName: `Burger morbido di ${autoLunchProtein} con ${autoLunchCarb} e ${autoLunchVegetable}`,
-        ingredients: [`40 g ${autoLunchProtein}`, `20 g ${autoLunchVegetable} cotta nell'impasto`, `60 g ${autoLunchCarb}`, `50 g ${autoLunchVegetable} cotta come contorno`, `1 cucchiaino olio EVO a crudo`],
-        preparation: `Cuoci bene ${autoLunchVegetable}. Trita o schiaccia ${autoLunchProtein}, uniscilo a una parte della verdura e forma un burger molto morbido. Cuocilo in padella o forno finche resta soffice. Servi con ${autoLunchCarb} ben cotto e la restante verdura, completando con olio EVO a crudo.`,
-        notes: ["Preparazione morbida, facile da afferrare e non asciutta."],
-        safetyNotes: ["Offrire sempre nei tagli sicuri adeguati all'eta del bambino."],
-        substitutions: ["Puoi sostituire il burger con polpette morbide dello stesso impasto."],
-        balancedPlate: buildBalancedPlateForPolicy(policy, autoLunchCarb, autoLunchProtein, autoLunchVegetable),
-      },
-      {
-        mealType: "merenda",
-        dishName: "Pane morbido con crema di ceci e frutta",
-        ingredients: [`1 fetta pane morbido`, `25 g ceci decorticati cotti e schiacciati`, `30 g ${snackFruit} schiacciata`],
-        preparation: `Schiaccia i ceci fino a ottenere una crema morbida, spalmarla sul pane e servi accanto la ${snackFruit} schiacciata oppure spalmata in strato sottile.`,
-        notes: ["Merenda semplice da gestire."],
-        safetyNotes: ["Pane e frutta sempre offerti in forma morbida e nei tagli sicuri."],
-        substitutions: ["Puoi sostituire il pane con pancake morbido se gia tollerato."],
-      },
-      {
-        mealType: "cena",
-        dishName: `Polpette morbide di ${autoDinnerProtein} con ${autoDinnerCarb} e ${autoDinnerVegetable}`,
-        ingredients: [`40 g ${autoDinnerProtein}`, `25 g ${autoDinnerCarb}`, `60 g ${autoDinnerVegetable} cotta`, `1 cucchiaino olio EVO a crudo`, `1 cucchiaino pangrattato q.b.`],
-        preparation: `Cuoci ${autoDinnerVegetable} finche morbida. Schiaccia o frulla ${autoDinnerProtein}, mescolalo con parte della verdura e poca base legante q.b. fino a ottenere un composto molto morbido. Forma piccole polpette schiacciabili, cuocile in forno o padella e servi con ${autoDinnerCarb} ben cotto e la restante verdura, completando con olio EVO a crudo.`,
-        notes: ["Polpette molto morbide e umide."],
-        safetyNotes: ["Offrire sempre nei tagli sicuri adeguati all'eta del bambino."],
-        substitutions: ["Puoi sostituire le polpette con burger morbidi usando lo stesso impasto."],
-        balancedPlate: buildBalancedPlateForPolicy(policy, autoDinnerCarb, autoDinnerProtein, autoDinnerVegetable),
-      },
-    ],
-    dailyNotes: ["Offri acqua durante tutta la giornata."],
-    warnings,
-    shoppingList: [
-      "fiocchi di avena",
-      breakfastFruit,
-      autoLunchProtein,
-      autoLunchCarb,
-      autoLunchVegetable,
-      "pane morbido",
-      "ceci decorticati",
-      autoDinnerProtein,
-      autoDinnerCarb,
-      autoDinnerVegetable,
-    ],
-  };
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const candidate = buildFallbackMenuCandidate({
+      childProfileSummary,
+      policy,
+      seed: buildVariationSeed(baseSeed, `attempt-${attempt}`),
+    });
 
-  const mistoMenu: DailyMenuSchema = {
-    title: "Menu giornaliero bilanciato",
-    childProfileSummary,
-    meals: [
-      {
-        mealType: "colazione",
-        dishName: `Porridge morbido con ${breakfastFruit}`,
-        ingredients: [`20 g fiocchi di avena`, dairyForbidden ? `120 ml acqua` : `120 ml latte o acqua`, `40 g ${breakfastFruit} schiacciata`],
-        preparation: `Cuoci i fiocchi di avena con ${dairyForbidden ? "l'acqua" : "latte o acqua"} fino a ottenere una crema morbida. Aggiungi la ${breakfastFruit} schiacciata e servi tiepido.`,
-        notes: ["Colazione semplice e cremosa."],
-        safetyNotes: ["Offrire sempre nei tagli sicuri adeguati all'eta del bambino."],
-        substitutions: ["Puoi usare altra frutta morbida di stagione."],
-      },
-      {
-        mealType: "pranzo",
-        dishName: `Crema di ${classicLunchCarb} con ${classicLunchVegetable} e ${classicLunchProtein}`,
-        ingredients: [`25 g ${classicLunchCarb}`, `150 ml brodo vegetale leggero`, `60 g ${classicLunchVegetable} cotta`, `30 g ${classicLunchProtein}`, `1 cucchiaino olio EVO a crudo`],
-        preparation: `Cuoci ${classicLunchVegetable} finche molto morbida. Cuoci ${classicLunchCarb} nel brodo, unisci ${classicLunchProtein} e frulla tutto fino a ottenere una crema liscia. Completa con olio EVO a crudo.`,
-        notes: ["Pasto in stile classico."],
-        safetyNotes: ["Consistenza morbida e omogenea."],
-        substitutions: ["Puoi sostituire la verdura con altra verdura cotta e frullata."],
-        balancedPlate: buildBalancedPlateForPolicy(policy, classicLunchCarb, classicLunchProtein, classicLunchVegetable),
-      },
-      {
-        mealType: "merenda",
-        dishName: dairyForbidden ? "Porridge morbido con frutta schiacciata" : "Yogurt bianco con frutta morbida",
-        ingredients: dairyForbidden
-          ? [`15 g fiocchi di avena`, `100 ml acqua`, `40 g ${snackFruit} schiacciata`]
-          : [`80 g yogurt bianco intero`, `40 g ${snackFruit} schiacciata`],
-        preparation: dairyForbidden
-          ? `Cuoci i fiocchi di avena con l'acqua fino a ottenere un porridge morbido. Aggiungi la ${snackFruit} schiacciata e mescola fino a rendere il tutto uniforme e semplice da offrire.`
-          : `Mescola lo yogurt con la ${snackFruit} schiacciata fino a ottenere una consistenza uniforme e facile da offrire.`,
-        notes: ["Merenda semplice."],
-        safetyNotes: ["Offrire sempre nei tagli sicuri adeguati all'eta del bambino."],
-        substitutions: [
-          dairyForbidden ? "Puoi sostituire con purea di frutta e cereale morbido." : "Puoi sostituire lo yogurt con porridge morbido.",
-        ],
-      },
-      {
-        mealType: "cena",
-        dishName: `Burger morbido di ${autoDinnerProtein} con ${autoDinnerCarb} e ${autoDinnerVegetable}`,
-        ingredients: [`40 g ${autoDinnerProtein}`, `20 g ${autoDinnerVegetable} cotta nell'impasto`, `60 g ${autoDinnerCarb}`, `50 g ${autoDinnerVegetable} cotta come contorno`, `1 cucchiaino olio EVO a crudo`],
-        preparation: `Cuoci ${autoDinnerVegetable} finche molto morbida. Trita o schiaccia ${autoDinnerProtein}, uniscilo a parte della verdura e forma un burger soffice. Cuocilo finche morbido e servilo con ${autoDinnerCarb} ben cotto e la restante verdura, completando con olio EVO a crudo.`,
-        notes: ["Pasto in stile autosvezzamento, morbido e facile da afferrare."],
-        safetyNotes: ["Offrire sempre nei tagli sicuri adeguati all'eta del bambino."],
-        substitutions: ["Puoi sostituire il burger con polpette morbide dello stesso impasto."],
-        balancedPlate: buildBalancedPlateForPolicy(policy, autoDinnerCarb, autoDinnerProtein, autoDinnerVegetable),
-      },
-    ],
-    dailyNotes: ["Offri acqua durante tutta la giornata."],
-    warnings,
-    shoppingList: [
-      "fiocchi di avena",
-      breakfastFruit,
-      classicLunchCarb,
-      classicLunchVegetable,
-      classicLunchProtein,
-      ...(dairyForbidden ? [] : ["yogurt bianco intero"]),
-      autoDinnerProtein,
-      autoDinnerCarb,
-      autoDinnerVegetable,
-    ],
-  };
+    const candidateWithWarnings = {
+      ...candidate,
+      warnings: dedupeValues([...candidate.warnings, ...warnings]),
+    };
 
-  const menu =
-    policy.feedingStyle === "classico"
-      ? classicoMenu
-      : policy.feedingStyle === "autosvezzamento"
-        ? autosvezzamentoMenu
-        : mistoMenu;
+    if (!options?.previousMenu || !isSameMenuAsPrevious(candidateWithWarnings, options.previousMenu)) {
+      return applyForcedAdjustments(
+        candidateWithWarnings,
+        policy,
+        options?.forcedAdjustments ?? { replacements: [], avoidTerms: [], mealChanges: [], requiresVariation: false },
+        options?.previousMenu,
+        buildVariationSeed(baseSeed, `attempt-${attempt}`),
+      );
+    }
+  }
 
   return applyForcedAdjustments(
-    menu,
+    {
+      ...buildFallbackMenuCandidate({
+        childProfileSummary,
+        policy,
+        seed: buildVariationSeed(baseSeed, "final"),
+      }),
+      warnings: dedupeValues(warnings),
+    },
     policy,
     options?.forcedAdjustments ?? { replacements: [], avoidTerms: [], mealChanges: [], requiresVariation: false },
     options?.previousMenu,
+    buildVariationSeed(baseSeed, "final"),
   );
 }
 
@@ -1281,6 +1399,7 @@ function buildDeterministicModifiedMenu(params: {
   childProfileSummary: DailyMenuSchema["childProfileSummary"];
   policy: MenuPolicyContext;
   forcedAdjustments: ForcedMenuAdjustments;
+  variationSeed: string;
 }) {
   const baseMenu: DailyMenuSchema = {
     ...params.previousMenu,
@@ -1288,7 +1407,7 @@ function buildDeterministicModifiedMenu(params: {
     childProfileSummary: params.childProfileSummary,
   };
 
-  return applyForcedAdjustments(baseMenu, params.policy, params.forcedAdjustments, params.previousMenu);
+  return applyForcedAdjustments(baseMenu, params.policy, params.forcedAdjustments, params.previousMenu, params.variationSeed);
 }
 
 async function generateDailyMenuWithOpenAI(params: {
@@ -1299,6 +1418,7 @@ async function generateDailyMenuWithOpenAI(params: {
   previousMenu?: DailyMenuSchema;
   isModification?: boolean;
   forcedAdjustments: ForcedMenuAdjustments;
+  variationSeed: string;
 }) {
   if (params.previousMenu && hasExplicitModificationIntent(params.forcedAdjustments)) {
     const deterministicMenu = buildDeterministicModifiedMenu({
@@ -1306,6 +1426,7 @@ async function generateDailyMenuWithOpenAI(params: {
       childProfileSummary: params.childProfileSummary,
       policy: params.policy,
       forcedAdjustments: params.forcedAdjustments,
+      variationSeed: buildVariationSeed(params.variationSeed, "deterministic"),
     });
 
     const deterministicIssues: string[] = [];
@@ -1334,6 +1455,7 @@ async function generateDailyMenuWithOpenAI(params: {
       previousMenu: params.previousMenu,
       isModification: params.isModification,
       forcedAdjustments: params.forcedAdjustments,
+      variationSeed: params.variationSeed,
     });
   }
 
@@ -1367,7 +1489,13 @@ async function generateDailyMenuWithOpenAI(params: {
     try {
       const outputText = response.output_text;
       const parsed = dailyMenuSchema.parse(JSON.parse(outputText));
-      const adjustedMenu = applyForcedAdjustments(parsed, params.policy, params.forcedAdjustments, params.previousMenu);
+      const adjustedMenu = applyForcedAdjustments(
+        parsed,
+        params.policy,
+        params.forcedAdjustments,
+        params.previousMenu,
+        buildVariationSeed(params.variationSeed, `openai-attempt-${attempt}`),
+      );
       const issues: string[] = [];
 
       if (!hasCompleteMeals(adjustedMenu)) {
@@ -1400,6 +1528,7 @@ async function generateDailyMenuWithOpenAI(params: {
     previousMenu: params.previousMenu,
     isModification: params.isModification,
     forcedAdjustments: params.forcedAdjustments,
+    variationSeed: buildVariationSeed(params.variationSeed, "fallback"),
   });
 }
 
@@ -1513,6 +1642,7 @@ export async function generateMenuFromPrompt(params: {
   const forcedAdjustments = getForcedMenuAdjustments(params.prompt);
   let promptForModel = params.prompt;
   let previousMenuForModification: DailyMenuSchema | undefined;
+  let previousMenuForGeneration: DailyMenuSchema | undefined;
 
   if (params.sourceSessionId) {
     await ensureSessionBelongsToUser({
@@ -1568,6 +1698,24 @@ export async function generateMenuFromPrompt(params: {
     sessionId = createdSession.id;
   }
 
+  if (previousMenuForModification) {
+    previousMenuForGeneration = previousMenuForModification;
+  } else {
+    previousMenuForGeneration =
+      (await getLatestAssistantMenuForUser({
+      admin,
+      userId: params.userId,
+      dayStartIso,
+      excludeSessionId: sessionId,
+      })) ?? undefined;
+  }
+
+  const variationSeed = buildVariationSeed(
+    sessionId,
+    params.prompt,
+    previousMenuForGeneration ? menuSignature(previousMenuForGeneration) : undefined,
+  );
+
   await admin.from("menu_messages").insert({
     session_id: sessionId,
     user_id: params.userId,
@@ -1587,9 +1735,10 @@ export async function generateMenuFromPrompt(params: {
     childProfileSummary,
     userPrompt: promptForModel,
     policy,
-    previousMenu: previousMenuForModification,
+    previousMenu: previousMenuForGeneration,
     isModification: Boolean(params.sourceSessionId),
     forcedAdjustments,
+    variationSeed,
   });
   const assistantText = menuToMessageText(menu);
 
