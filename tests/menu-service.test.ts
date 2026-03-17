@@ -21,4 +21,17 @@ describe("menu-service", () => {
     expect(recipe.mealType).toBe("colazione");
     expect(recipe.dishName.length).toBeGreaterThan(0);
   });
+
+  it("nel classico a pranzo usa pastina e non pasta", () => {
+    const recipe = menuServiceTestables.selectRecipeFromCatalog({
+      style: "classico",
+      mealType: "pranzo",
+      seed: "regression-classico-pranzo-pastina",
+      forbiddenTerms: ["sale aggiunto", "zucchero", "miele", "mais", "pop corn", "funghi"],
+    });
+
+    expect(recipe.mealType).toBe("pranzo");
+    expect(recipe.dishName.toLowerCase()).toContain("pastina");
+    expect(recipe.ingredients.join(" ").toLowerCase()).not.toContain("pasta corta");
+  });
 });

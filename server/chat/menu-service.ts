@@ -435,7 +435,7 @@ interface BuiltMealResult {
 const RECIPE_FAMILY_ALLOWLIST = {
   classico: {
     colazione: ["porridge", "crema-latte", "yogurt", "budino", "frullato"],
-    pranzo: ["pappa-classica", "pastina", "pasta", "riso", "quinoa", "cous-cous", "orzo"],
+    pranzo: ["pappa-classica", "pastina", "riso", "quinoa", "cous-cous", "orzo"],
     merenda: ["purea", "yogurt", "porridge", "frullato", "budino", "pancake", "muffin", "torta", "plumcake"],
     cena: ["crema", "vellutata", "passato"],
   },
@@ -1044,7 +1044,11 @@ function buildAlternativeMeal(params: {
   }
 
   if (params.mealType === "pranzo") {
-    if (requestedDishMode === "pasta" || params.policy.feedingStyle === "autosvezzamento") {
+    const shouldUseAutosLunch =
+      params.policy.feedingStyle === "autosvezzamento" ||
+      (params.policy.feedingStyle === "misto" && requestedDishMode === "pasta");
+
+    if (shouldUseAutosLunch) {
       return buildAutosvezzamentoLunchMeal({
         policy: params.policy,
         seed: baseSeed,
@@ -1061,7 +1065,7 @@ function buildAlternativeMeal(params: {
       forbiddenTerms,
       excludeTerms: softAvoidTerms,
       preferredFamilies:
-        requestedDishMode === "pastina"
+        requestedDishMode === "pastina" || requestedDishMode === "pasta"
           ? ["pastina"]
           : requestedDishMode === "riso"
             ? ["riso"]
