@@ -492,9 +492,6 @@ function recipeToSearchText(recipe: ChatRecipe) {
     recipe.dishName,
     ...recipe.ingredients,
     recipe.preparation,
-    ...recipe.notes,
-    ...recipe.safetyNotes,
-    ...recipe.substitutions,
     recipe.meta.fruit ?? "",
     recipe.meta.carb ?? "",
     recipe.meta.protein ?? "",
@@ -1569,6 +1566,10 @@ function menuToMessageText(menu: DailyMenuSchema) {
 
   return `${menu.title}\n\n${mealList}`;
 }
+
+export const __menuServiceTestables = {
+  selectRecipeFromCatalog,
+};
 
 function buildBalancedPlateForPolicy(policy: MenuPolicyContext, carbLabel: string, proteinLabel: string, vegetableLabel: string) {
   return {
