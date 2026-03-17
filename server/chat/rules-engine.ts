@@ -66,6 +66,10 @@ function matchesExclusionAlias(term: string, alias: string) {
   return normalizedTerm === normalizedAlias || normalizedTerm.includes(normalizedAlias) || normalizedAlias.includes(normalizedTerm);
 }
 
+function getExclusionAliasScore(term: string, alias: string) {
+  return matchesExclusionAlias(term, alias) ? normalizeFreeText(alias).length : -1;
+}
+
 const EXCLUSION_CATEGORY_ALIASES = {
   carne: ["carne"],
   legumi: ["legumi"],
@@ -89,13 +93,21 @@ export function expandForbiddenTerm(term: string) {
 
   expanded.add(normalizedTerm);
 
+  let bestGroupKey: keyof typeof EXCLUSION_CATEGORY_ALIASES | null = null;
+  let bestScore = -1;
+
   for (const [groupKey, aliases] of Object.entries(EXCLUSION_CATEGORY_ALIASES) as Array<
     [keyof typeof EXCLUSION_CATEGORY_ALIASES, string[]]
   >) {
-    if (aliases.some((alias) => matchesExclusionAlias(normalizedTerm, alias))) {
-      businessRulesConfig.exclusionExpansionGroups[groupKey].forEach((alias) => expanded.add(normalizeFreeText(alias)));
-      break;
+    const groupScore = Math.max(...aliases.map((alias) => getExclusionAliasScore(normalizedTerm, alias)));
+    if (groupScore > bestScore) {
+      bestScore = groupScore;
+      bestGroupKey = groupKey;
     }
+  }
+
+  if (bestGroupKey && bestScore >= 0) {
+    businessRulesConfig.exclusionExpansionGroups[bestGroupKey].forEach((alias) => expanded.add(normalizeFreeText(alias)));
   }
 
   return [...expanded];
