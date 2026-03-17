@@ -565,7 +565,7 @@ function rebuildMealUntilDistinct(params: {
   let candidate = buildAlternativeMeal({
     mealType: params.mealType,
     policy: params.policy,
-    explicitAvoidTerms: mergeForbiddenTerms(params.policy.forbiddenTerms, avoidTerms),
+    softAvoidTerms: avoidTerms,
     variationSeed: buildVariationSeed(params.variationSeed, params.mealType, "distinct-initial"),
   });
 
@@ -587,7 +587,7 @@ function rebuildMealUntilDistinct(params: {
     candidate = buildAlternativeMeal({
       mealType: params.mealType,
       policy: params.policy,
-      explicitAvoidTerms: mergeForbiddenTerms(params.policy.forbiddenTerms, avoidTerms),
+      softAvoidTerms: avoidTerms,
       variationSeed: buildVariationSeed(params.variationSeed, params.mealType, "distinct", String(attempt), avoidTerms.join(",")),
     });
   }
@@ -660,8 +660,18 @@ function selectRecipeFromCatalog(params: {
     allRecipes.filter((recipe) => !recipeContainsAnyTerm(recipe, params.forbiddenTerms)),
   ];
 
-  const selectedPool = candidatePools.find((pool) => pool.length > 0) ?? [];
-  return pickSeededValue(selectedPool, params.seed);
+  const selectedPool = candidatePools.find((pool) => pool.length > 0);
+  if (selectedPool && selectedPool.length > 0) {
+    return pickSeededValue(selectedPool, params.seed);
+  }
+
+  if (allRecipes.length === 0) {
+    throw new Error(`Catalogo ricette non configurato correttamente per ${params.style} / ${params.mealType}.`);
+  }
+
+  throw new Error(
+    `Con le esclusioni attuali non ci sono ricette compatibili per ${params.mealType}. Riduci le esclusioni nel profilo bambino o nella richiesta.`,
+  );
 }
 
 function buildMealFromRecipe(recipe: ChatRecipe, policy: MenuPolicyContext): BuiltMealResult {
@@ -987,12 +997,20 @@ function buildAlternativeMeal(params: {
   policy: MenuPolicyContext;
   requestedDish?: string;
   explicitAvoidTerms?: string[];
+  softAvoidTerms?: string[];
   variationSeed?: string;
 }): DailyMenuSchema["meals"][number] {
   const forbiddenTerms = mergeForbiddenTerms(params.policy.forbiddenTerms, params.explicitAvoidTerms);
+  const softAvoidTerms = dedupeValues(params.softAvoidTerms ?? []);
   const requestedDish = params.requestedDish ? cleanPromptTerm(params.requestedDish) : undefined;
   const requestedDishMode = getRequestedDishMode(requestedDish);
-  const baseSeed = buildVariationSeed(params.variationSeed, params.mealType, requestedDish, forbiddenTerms.join(","));
+  const baseSeed = buildVariationSeed(
+    params.variationSeed,
+    params.mealType,
+    requestedDish,
+    forbiddenTerms.join(","),
+    softAvoidTerms.join(","),
+  );
 
   if (params.mealType === "colazione" || params.mealType === "merenda") {
     const useAutos =
@@ -1013,6 +1031,7 @@ function buildAlternativeMeal(params: {
           policy: params.policy,
           seed: baseSeed,
           forbiddenTerms,
+          excludeTerms: softAvoidTerms,
           preferredFamilies,
         })
       : buildClassicSweetMeal({
@@ -1020,6 +1039,7 @@ function buildAlternativeMeal(params: {
           policy: params.policy,
           seed: baseSeed,
           forbiddenTerms,
+          excludeTerms: softAvoidTerms,
           preferredFamilies,
         });
 
@@ -1032,6 +1052,7 @@ function buildAlternativeMeal(params: {
         policy: params.policy,
         seed: baseSeed,
         forbiddenTerms,
+        excludeTerms: softAvoidTerms,
         preferredFamilies: requestedDishMode === "pasta" ? ["pasta"] : requestedDishMode === "riso" ? ["riso"] : [],
       }).meal;
     }
@@ -1041,6 +1062,7 @@ function buildAlternativeMeal(params: {
       policy: params.policy,
       seed: baseSeed,
       forbiddenTerms,
+      excludeTerms: softAvoidTerms,
       preferredFamilies:
         requestedDishMode === "pastina"
           ? ["pastina"]
@@ -1068,6 +1090,7 @@ function buildAlternativeMeal(params: {
       policy: params.policy,
       seed: baseSeed,
       forbiddenTerms,
+      excludeTerms: softAvoidTerms,
       preferredFamilies,
     }).meal;
   }
@@ -1077,6 +1100,7 @@ function buildAlternativeMeal(params: {
     policy: params.policy,
     seed: baseSeed,
     forbiddenTerms,
+    excludeTerms: softAvoidTerms,
     preferredFamilies:
       requestedDishMode === "vellutata"
         ? ["vellutata"]
@@ -1232,7 +1256,8 @@ function sanitizeAutosvezzamentoLunch(
   const rebuiltLunch = buildAutosvezzamentoLunchMeal({
     policy,
     seed: buildVariationSeed(variationSeed, "autos-lunch-sanitize"),
-    forbiddenTerms: mergeForbiddenTerms(policy.forbiddenTerms, extractMealAvoidTerms(lunch)),
+    forbiddenTerms: policy.forbiddenTerms,
+    excludeTerms: extractMealAvoidTerms(lunch),
   }).meal;
 
   const meals = [...menu.meals];
@@ -1354,7 +1379,7 @@ function enforceSessionVarietyAgainstPreviousMenu(
     meals[currentIndex] = buildAlternativeMeal({
       mealType,
       policy,
-      explicitAvoidTerms: mergeForbiddenTerms(policy.forbiddenTerms, avoidTerms),
+      softAvoidTerms: avoidTerms,
       variationSeed: buildVariationSeed(variationSeed, mealType, "previous-session", avoidTerms.join(",")),
     });
     warnings.push(`Il pasto ${mealType} è stato variato automaticamente rispetto al menu precedente.`);
