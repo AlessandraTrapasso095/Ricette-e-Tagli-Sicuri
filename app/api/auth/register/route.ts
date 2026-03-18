@@ -13,17 +13,10 @@ function buildEmailRedirectTo(request: Request) {
   return `${baseUrl}/auth/callback?next=/dashboard&event=signup-confirmed`;
 }
 
-type RegisterErrorCode = "EMAIL_ALREADY_REGISTERED" | "INVALID_PASSWORD" | "REGISTRATION_FAILED";
+type RegisterErrorCode = "INVALID_PASSWORD" | "REGISTRATION_FAILED";
 
 function mapRegisterError(message: string) {
   const normalized = message.toLowerCase();
-
-  if (normalized.includes("already registered") || normalized.includes("already exists")) {
-    return {
-      code: "EMAIL_ALREADY_REGISTERED" as const,
-      message: "Utente già iscritto, hai dimenticato la password?",
-    };
-  }
 
   if (normalized.includes("password")) {
     return {
@@ -36,6 +29,11 @@ function mapRegisterError(message: string) {
     code: "REGISTRATION_FAILED" as const,
     message: "Registrazione non riuscita. Riprova tra poco.",
   };
+}
+
+function isAlreadyRegisteredError(message: string) {
+  const normalized = message.toLowerCase();
+  return normalized.includes("already registered") || normalized.includes("already exists");
 }
 
 function extractActionLinkFromGenerateLinkResponse(data: unknown) {
@@ -52,55 +50,13 @@ function extractActionLinkFromGenerateLinkResponse(data: unknown) {
   return typeof candidate.properties?.action_link === "string" ? candidate.properties.action_link : null;
 }
 
-function normalizeEmail(email: string) {
-  return email.trim().toLowerCase();
-}
-
-async function isEmailAlreadyRegistered(email: string) {
-  const admin = createSupabaseAdminClient();
-  const normalizedEmail = normalizeEmail(email);
-  const { data: profileData, error: profileError } = await admin
-    .from("profiles")
-    .select("id, email")
-    .ilike("email", normalizedEmail)
-    .maybeSingle();
-
-  if (profileError) {
-    throw profileError;
-  }
-
-  if (profileData?.id) {
-    return true;
-  }
-
-  // Fallback robusto: alcuni account possono esistere in auth.users ma non essere ancora sincronizzati in profiles.
-  let page = 1;
-  const perPage = 200;
-  const maxPages = 20;
-
-  while (page <= maxPages) {
-    const { data: usersData, error: usersError } = await admin.auth.admin.listUsers({
-      page,
-      perPage,
-    });
-
-    if (usersError) {
-      throw usersError;
-    }
-
-    const users = usersData?.users ?? [];
-    if (users.some((user) => normalizeEmail(user.email ?? "") === normalizedEmail)) {
-      return true;
-    }
-
-    if (users.length < perPage) {
-      break;
-    }
-
-    page += 1;
-  }
-
-  return false;
+function buildMaskedSuccessResponse() {
+  return NextResponse.json({
+    data: {
+      usedFallbackEmail: false,
+      maskedExistingAccount: true,
+    },
+  });
 }
 
 async function fallbackSignupWithSupabaseDefaultEmail(params: {
@@ -172,33 +128,34 @@ export async function POST(request: Request) {
       );
     }
 
-    if (await isEmailAlreadyRegistered(parsed.data.email)) {
-      return NextResponse.json(
-        { error: "Utente già iscritto, hai dimenticato la password?", code: "EMAIL_ALREADY_REGISTERED" as RegisterErrorCode },
-        { status: 409 },
-      );
-    }
-
     const redirectTo = buildEmailRedirectTo(request);
     if (!hasCustomEmailTransport()) {
-      const fallbackResult = await fallbackSignupWithSupabaseDefaultEmail({
-        email: parsed.data.email,
-        password: parsed.data.password,
-        fullName: parsed.data.fullName,
-        gender: parsed.data.gender,
-        redirectTo,
-      });
+      try {
+        const fallbackResult = await fallbackSignupWithSupabaseDefaultEmail({
+          email: parsed.data.email,
+          password: parsed.data.password,
+          fullName: parsed.data.fullName,
+          gender: parsed.data.gender,
+          redirectTo,
+        });
 
-      if (fallbackResult.userId) {
-        const admin = createSupabaseAdminClient();
-        await admin
-          .from("profiles")
-          .update({
-            full_name: parsed.data.fullName,
-            display_name: parsed.data.fullName,
-            gender: parsed.data.gender,
-          })
-          .eq("id", fallbackResult.userId);
+        if (fallbackResult.userId) {
+          const admin = createSupabaseAdminClient();
+          await admin
+            .from("profiles")
+            .update({
+              full_name: parsed.data.fullName,
+              display_name: parsed.data.fullName,
+              gender: parsed.data.gender,
+            })
+            .eq("id", fallbackResult.userId);
+        }
+      } catch (error) {
+        if (error instanceof Error && isAlreadyRegisteredError(error.message)) {
+          return buildMaskedSuccessResponse();
+        }
+
+        throw error;
       }
 
       return NextResponse.json({
@@ -268,6 +225,10 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
+    if (error instanceof Error && isAlreadyRegisteredError(error.message)) {
+      return buildMaskedSuccessResponse();
+    }
+
     const mapped = error instanceof Error ? mapRegisterError(error.message) : mapRegisterError("unknown_error");
     return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: 400 });
   }

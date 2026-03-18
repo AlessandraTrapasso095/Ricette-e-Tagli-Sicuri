@@ -12,11 +12,9 @@ import { Select } from "@/components/ui/select";
 import { registerSchema } from "@/lib/validation/forms";
 
 type RegisterValues = z.infer<typeof registerSchema>;
-type RegisterErrorCode = "EMAIL_ALREADY_REGISTERED" | "INVALID_PASSWORD" | "REGISTRATION_FAILED";
 
 export function RegisterForm() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [errorCode, setErrorCode] = useState<RegisterErrorCode | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -34,7 +32,6 @@ export function RegisterForm() {
   async function onSubmit(values: RegisterValues) {
     setLoading(true);
     setErrorMessage(null);
-    setErrorCode(null);
     setSuccessMessage(null);
 
     try {
@@ -47,19 +44,15 @@ export function RegisterForm() {
 
       if (!response.ok) {
         setErrorMessage(json.error ?? "Registrazione non riuscita.");
-        setErrorCode(typeof json.code === "string" ? (json.code as RegisterErrorCode) : null);
         return;
       }
 
       setSuccessMessage(
-        json.data?.usedFallbackEmail
-          ? "Registrazione completata. Controlla la tua email per verificare l'account. Controlla anche nello spam."
-          : "Registrazione completata. Ti abbiamo inviato un'email di conferma. Controlla anche nello spam.",
+        "Se l'indirizzo inserito è valido, riceverai un'email per completare la registrazione o per proseguire con l'accesso. Controlla anche nello spam.",
       );
       form.reset();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Registrazione non riuscita.");
-      setErrorCode(null);
     } finally {
       setLoading(false);
     }
@@ -129,15 +122,6 @@ export function RegisterForm() {
       </div>
 
       {errorMessage ? <p className="text-sm text-red-600">{errorMessage}</p> : null}
-      {errorCode === "EMAIL_ALREADY_REGISTERED" ? (
-        <p className="text-sm text-rose-700">
-          Vai su{" "}
-          <Link href="/login" className="font-semibold text-rose-700 underline hover:text-rose-800">
-            Accedi
-          </Link>{" "}
-          e usa il reset password.
-        </p>
-      ) : null}
       {successMessage ? <p className="text-sm text-emerald-700">{successMessage}</p> : null}
 
       <Button type="submit" className="w-full" disabled={loading}>

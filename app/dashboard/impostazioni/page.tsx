@@ -1,4 +1,5 @@
 import { AccountSettingsForm } from "@/components/forms/account-settings-form";
+import { AccountPrivacyActions } from "@/components/forms/account-privacy-actions";
 import { DEFAULT_NOTIFICATION_PREFERENCES } from "@/config/notification-preferences";
 import { ReaderAreaPageLayout } from "@/components/dashboard/reader-area-page-layout";
 import { LogoutButton } from "@/components/dashboard/logout-button";
@@ -36,6 +37,12 @@ export default async function DashboardImpostazioniPage() {
               ticketUpdates: profile?.receive_ticket_updates ?? DEFAULT_NOTIFICATION_PREFERENCES.ticketUpdates,
             }}
           />
+        </Card>
+
+        <Card>
+          <CardTitle>Privacy e dati</CardTitle>
+          <CardDescription>Gestisci esportazione dati e richieste privacy sul tuo account.</CardDescription>
+          <AccountPrivacyActions />
         </Card>
 
         <Card>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { chatPromptSchema } from "@/lib/validation/forms";
 import { getApiUserOrResponse } from "@/server/auth/api-auth";
+import { evaluateChatPromptSecurity, logChatSecurityEvent } from "@/server/chat/security-policy";
 import { generateMenuFromPrompt } from "@/server/chat/menu-service";
 
 export async function POST(request: Request) {
@@ -16,6 +17,20 @@ export async function POST(request: Request) {
 
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Input non valido" }, { status: 400 });
+    }
+
+    const securityReview = evaluateChatPromptSecurity(parsed.data.prompt);
+    if (!securityReview.allowed) {
+      await logChatSecurityEvent({
+        userId: user.id,
+        action: "chat_prompt_blocked",
+        details: {
+          prompt: parsed.data.prompt,
+          matchedRules: securityReview.matchedRules,
+        },
+      });
+
+      return NextResponse.json({ error: securityReview.reason }, { status: 422 });
     }
 
     const response = await generateMenuFromPrompt({

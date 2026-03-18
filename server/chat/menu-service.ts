@@ -25,6 +25,7 @@ import {
   hasCompleteMeals,
   type MenuPolicyContext,
 } from "@/server/chat/rules-engine";
+import { logChatSecurityEvent, sanitizeGeneratedMenuOutput } from "@/server/chat/security-policy";
 import type { ChildProfile } from "@/types/domain";
 
 const DEFAULT_CHAT_MODEL = "gpt-4.1-mini";
@@ -2049,7 +2050,45 @@ export async function generateMenuFromPrompt(params: {
     forcedAdjustments,
     variationSeed,
   });
-  const assistantText = menuToMessageText(menu);
+  const sanitizationResult = sanitizeGeneratedMenuOutput(menu);
+  let safeMenu = sanitizationResult.menu;
+
+  if (sanitizationResult.matchedRules.length > 0) {
+    await logChatSecurityEvent({
+      userId: params.userId,
+      action: "chat_output_redacted",
+      details: {
+        sessionId,
+        matchedRules: sanitizationResult.matchedRules,
+        redactedFields: sanitizationResult.redactedFields,
+      },
+    });
+
+    safeMenu = fallbackMenu(childProfileSummary, policy, {
+      issues: ["Output AI rigenerato per ragioni di sicurezza e protezione dati."],
+      previousMenu: previousMenuForGeneration,
+      isModification: Boolean(params.sourceSessionId),
+      forcedAdjustments,
+      variationSeed: buildVariationSeed(variationSeed, "security-fallback"),
+    });
+
+    const safeFallbackReview = sanitizeGeneratedMenuOutput(safeMenu);
+    safeMenu = safeFallbackReview.menu;
+
+    if (safeFallbackReview.matchedRules.length > 0) {
+      await logChatSecurityEvent({
+        userId: params.userId,
+        action: "chat_output_fallback",
+        details: {
+          sessionId,
+          matchedRules: safeFallbackReview.matchedRules,
+          redactedFields: safeFallbackReview.redactedFields,
+        },
+      });
+    }
+  }
+
+  const assistantText = menuToMessageText(safeMenu);
 
   const { data: assistantMessage, error: assistantError } = await admin
     .from("menu_messages")
@@ -2058,7 +2097,7 @@ export async function generateMenuFromPrompt(params: {
       user_id: params.userId,
       role: "assistant",
       content: assistantText,
-      menu_payload: menu,
+      menu_payload: safeMenu,
     })
     .select("id")
     .single();
@@ -2071,7 +2110,7 @@ export async function generateMenuFromPrompt(params: {
     .from("menu_sessions")
     .update({
       last_message_at: new Date().toISOString(),
-      title: menu.title,
+      title: safeMenu.title,
       child_id: child?.id ?? null,
     })
     .eq("id", sessionId)
@@ -2083,15 +2122,15 @@ export async function generateMenuFromPrompt(params: {
       session_id: sessionId,
       child_id: child?.id ?? null,
       source_message_id: assistantMessage.id,
-      title: menu.title,
-      menu_payload: menu,
+      title: safeMenu.title,
+      menu_payload: safeMenu,
     });
   }
 
   return {
     sessionId,
     assistantMessageId: assistantMessage.id,
-    menu,
+    menu: safeMenu,
   };
 }
 

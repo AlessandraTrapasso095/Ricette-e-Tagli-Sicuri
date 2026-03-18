@@ -1,4 +1,5 @@
 import { AccountSettingsForm } from "@/components/forms/account-settings-form";
+import { AccountPrivacyActions } from "@/components/forms/account-privacy-actions";
 import { DEFAULT_NOTIFICATION_PREFERENCES } from "@/config/notification-preferences";
 import { LogoutButton } from "@/components/dashboard/logout-button";
 import { AdminReaderSettingsForm } from "@/components/forms/admin-reader-settings-form";
@@ -48,6 +49,12 @@ export default async function AdminImpostazioniPage() {
           notificationEndpoint="/api/admin/account/notifications"
           emailRedirectPath="/admin/impostazioni"
         />
+      </Card>
+
+      <Card>
+        <CardTitle>Privacy e dati</CardTitle>
+        <CardDescription>Esporta i dati del tuo account oppure invia una richiesta di cancellazione tracciata.</CardDescription>
+        <AccountPrivacyActions />
       </Card>
 
       <Card>
