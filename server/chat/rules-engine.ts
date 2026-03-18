@@ -81,6 +81,49 @@ const EXCLUSION_CATEGORY_ALIASES = {
   uovo: ["uovo", "uova", "frittata"],
 } as const satisfies Record<keyof typeof businessRulesConfig.exclusionExpansionGroups, string[]>;
 
+export function expandIngredientInflections(term: string) {
+  const normalizedTerm = normalizeFreeText(term);
+  const variants = new Set<string>();
+
+  if (!normalizedTerm) {
+    return [];
+  }
+
+  variants.add(normalizedTerm);
+
+  const parts = normalizedTerm.split(" ").filter(Boolean);
+  if (parts.length === 0) {
+    return [...variants];
+  }
+
+  const lastWord = parts.at(-1) ?? normalizedTerm;
+  const lastWordVariants = new Set<string>([lastWord]);
+
+  if (lastWord.length > 2) {
+    if (lastWord.endsWith("a")) {
+      lastWordVariants.add(`${lastWord.slice(0, -1)}e`);
+    }
+    if (lastWord.endsWith("e")) {
+      lastWordVariants.add(`${lastWord.slice(0, -1)}a`);
+      lastWordVariants.add(`${lastWord.slice(0, -1)}i`);
+    }
+    if (lastWord.endsWith("o")) {
+      lastWordVariants.add(`${lastWord.slice(0, -1)}i`);
+    }
+    if (lastWord.endsWith("i")) {
+      lastWordVariants.add(`${lastWord.slice(0, -1)}o`);
+      lastWordVariants.add(`${lastWord.slice(0, -1)}e`);
+    }
+  }
+
+  for (const lastWordVariant of lastWordVariants) {
+    const phraseVariant = [...parts.slice(0, -1), lastWordVariant].join(" ");
+    variants.add(phraseVariant);
+  }
+
+  return [...variants];
+}
+
 export function expandForbiddenTerm(term: string) {
   const normalizedTerm = normalizeFreeText(term);
   const expanded = new Set<string>();
@@ -89,7 +132,7 @@ export function expandForbiddenTerm(term: string) {
     return [];
   }
 
-  expanded.add(normalizedTerm);
+  expandIngredientInflections(normalizedTerm).forEach((variant) => expanded.add(variant));
 
   let bestGroupKey: keyof typeof EXCLUSION_CATEGORY_ALIASES | null = null;
   let bestScore = -1;

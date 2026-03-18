@@ -28,6 +28,7 @@ interface UserRow {
 
 interface TicketRow {
   id: string;
+  user_id: string;
   name: string;
   email: string;
   category: "accesso" | "bonus" | "chat_menu" | "tecnico" | "altro";
@@ -199,7 +200,7 @@ export function AdminOverviewPanels({
           </Card>
         ) : null}
 
-        {activeSection === "pendingTickets" ? <AdminSupportTicketsTable initialTickets={tickets} /> : null}
+        {activeSection === "pendingTickets" ? <AdminSupportTicketsTable initialTickets={tickets} books={books} /> : null}
 
         {activeSection === "failedAttempts" ? (
           <Card>

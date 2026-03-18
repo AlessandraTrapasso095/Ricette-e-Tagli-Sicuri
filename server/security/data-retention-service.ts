@@ -25,6 +25,11 @@ export interface DataRetentionCleanupResult {
   policies: RetentionPolicyResult[];
 }
 
+export interface LatestRetentionRunSummary extends DataRetentionCleanupResult {
+  action: "data_retention_cleanup" | "data_retention_dry_run";
+  createdAt: string;
+}
+
 function applyRetentionFilters<T>(query: T, filters: readonly RetentionFilter[] | undefined) {
   if (!filters || filters.length === 0) {
     return query;
@@ -111,4 +116,30 @@ export async function runDataRetentionCleanup(params?: {
   }
 
   return summary;
+}
+
+export async function getLatestDataRetentionRunSummary() {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("audit_logs")
+    .select("action, created_at, details")
+    .eq("entity", "retention_jobs")
+    .in("action", ["data_retention_cleanup", "data_retention_dry_run"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error("Impossibile leggere l'ultimo cleanup retention.");
+  }
+
+  if (!data?.details || typeof data.details !== "object") {
+    return null;
+  }
+
+  return {
+    ...(data.details as DataRetentionCleanupResult),
+    action: data.action as LatestRetentionRunSummary["action"],
+    createdAt: data.created_at,
+  } satisfies LatestRetentionRunSummary;
 }

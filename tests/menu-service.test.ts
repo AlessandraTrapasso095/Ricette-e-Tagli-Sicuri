@@ -34,4 +34,9 @@ describe("menu-service", () => {
     expect(recipe.dishName.toLowerCase()).toContain("pastina");
     expect(recipe.ingredients.join(" ").toLowerCase()).not.toContain("pasta corta");
   });
+
+  it("riconosce le esclusioni anche se il menu usa il plurale dell'ingrediente", () => {
+    expect(menuServiceTestables.containsTermInText("Purea di prugne", "prugna")).toBe(true);
+    expect(menuServiceTestables.containsTermInText("Yogurt con purea di pere", "pera")).toBe(true);
+  });
 });

@@ -48,6 +48,7 @@ interface UserSupportTicketDbRow extends SupportTicketMessageSourceRow {
 }
 
 interface AdminSupportTicketDbRow extends SupportTicketMessageSourceRow {
+  user_id: string;
   name: string;
   email: string;
   category: SupportTicketCategory;
@@ -88,6 +89,7 @@ export interface UserSupportTicketRow {
 
 export interface AdminSupportTicketRow {
   id: string;
+  user_id: string;
   name: string;
   email: string;
   category: SupportTicketCategory;
@@ -349,7 +351,7 @@ export async function getUserSupportTickets(userId: string) {
 
   const { data, error } = await admin
     .from("support_tickets")
-    .select("id, name, email, category, status, message, created_at, updated_at, book_id, admin_notes")
+    .select("id, user_id, name, email, category, status, message, created_at, updated_at, book_id, admin_notes")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
@@ -388,7 +390,7 @@ export async function getAdminSupportTickets(filters?: AdminSupportTicketFilters
   const admin = createSupabaseAdminClient();
   let query = admin
     .from("support_tickets")
-    .select("id, name, email, category, status, message, created_at, updated_at, book_id, admin_notes")
+    .select("id, user_id, name, email, category, status, message, created_at, updated_at, book_id, admin_notes")
     .order("created_at", { ascending: false })
     .limit(200);
 
@@ -414,6 +416,7 @@ export async function getAdminSupportTickets(filters?: AdminSupportTicketFilters
 
   let result = rows.map((row) => ({
     id: row.id,
+    user_id: row.user_id,
     name: row.name,
     email: row.email,
     category: row.category,
@@ -555,6 +558,7 @@ export async function updateAdminSupportTicketStatus(params: {
 
   return {
     id: updated.id,
+    user_id: updated.user_id,
     name: updated.name,
     email: updated.email,
     category: updated.category,

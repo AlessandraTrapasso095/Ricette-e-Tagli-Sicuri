@@ -11,8 +11,22 @@ export type RetentionFilter =
     };
 
 export interface DataRetentionPolicy {
-  key: "menu_sessions" | "access_attempt_logs" | "bonus_download_logs" | "user_email_events";
-  table: "menu_sessions" | "access_attempt_logs" | "bonus_download_logs" | "user_email_events";
+  key:
+    | "menu_sessions"
+    | "access_attempt_logs"
+    | "bonus_download_logs"
+    | "user_email_events"
+    | "saved_menus"
+    | "support_tickets"
+    | "audit_logs";
+  table:
+    | "menu_sessions"
+    | "access_attempt_logs"
+    | "bonus_download_logs"
+    | "user_email_events"
+    | "saved_menus"
+    | "support_tickets"
+    | "audit_logs";
   dateColumn: string;
   days: number;
   filters?: RetentionFilter[];
@@ -57,5 +71,31 @@ export const DATA_RETENTION_POLICIES: readonly DataRetentionPolicy[] = [
     label: "Eventi email transazionali",
     privacyDescription:
       "Gli eventi tecnici delle email transazionali vengono eliminati automaticamente dopo 365 giorni.",
+  },
+  {
+    key: "saved_menus",
+    table: "saved_menus",
+    dateColumn: "created_at",
+    days: 365,
+    label: "Menu salvati",
+    privacyDescription: "I menu salvati vengono eliminati automaticamente dopo 365 giorni.",
+  },
+  {
+    key: "support_tickets",
+    table: "support_tickets",
+    dateColumn: "updated_at",
+    days: 365,
+    filters: [{ type: "in", column: "status", value: ["risolto", "chiuso"] }],
+    label: "Ticket supporto chiusi o risolti",
+    privacyDescription:
+      "I ticket supporto chiusi o risolti vengono eliminati automaticamente dopo 365 giorni dall'ultimo aggiornamento.",
+  },
+  {
+    key: "audit_logs",
+    table: "audit_logs",
+    dateColumn: "created_at",
+    days: 365,
+    label: "Audit log",
+    privacyDescription: "Gli audit log applicativi vengono eliminati automaticamente dopo 365 giorni.",
   },
 ] as const;

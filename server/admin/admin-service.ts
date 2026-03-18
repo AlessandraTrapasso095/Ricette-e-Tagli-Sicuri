@@ -716,6 +716,11 @@ export async function getAdminUsersOverview() {
   });
 }
 
+export async function getAdminUserOverview(userId: string) {
+  const users = await getAdminUsersOverview();
+  return users.find((user) => user.id === userId) ?? null;
+}
+
 export async function setAdminUserSuspension(params: {
   adminUserId: string;
   userId: string;

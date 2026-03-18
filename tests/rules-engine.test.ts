@@ -19,4 +19,14 @@ describe("rules-engine", () => {
     expect(policy.forbiddenTerms).not.toContain("mela");
     expect(policy.forbiddenTerms).not.toContain("pera");
   });
+
+  it("espande i termini alimentari anche nelle forme singolare e plurale", () => {
+    const singular = expandForbiddenTerm("prugna");
+    const plural = expandForbiddenTerm("prugne");
+
+    expect(singular).toContain("prugna");
+    expect(singular).toContain("prugne");
+    expect(plural).toContain("prugna");
+    expect(plural).toContain("prugne");
+  });
 });

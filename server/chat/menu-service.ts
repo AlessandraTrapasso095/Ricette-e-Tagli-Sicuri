@@ -21,6 +21,7 @@ import {
   buildChildProfileSummary,
   buildMenuPolicyContext,
   buildMenuSystemPrompt,
+  expandIngredientInflections,
   expandForbiddenTerm,
   hasCompleteMeals,
   type MenuPolicyContext,
@@ -333,7 +334,7 @@ function containsTermInText(text: string, term: string) {
     return false;
   }
 
-  return normalizedText.includes(normalizedTerm);
+  return expandIngredientInflections(normalizedTerm).some((variant) => normalizedText.includes(variant));
 }
 
 function mealToText(meal: DailyMenuSchema["meals"][number]) {
@@ -1600,6 +1601,7 @@ function menuToMessageText(menu: DailyMenuSchema) {
 }
 
 export const __menuServiceTestables = {
+  containsTermInText,
   selectRecipeFromCatalog,
 };
 

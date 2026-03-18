@@ -1,8 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ExternalLink } from "lucide-react";
 
+import {
+  AdminUserManagementPanel,
+  type AdminUserManagementRow,
+} from "@/components/forms/admin-user-management-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,6 +20,7 @@ type CategoryFilter = "all" | SupportTicketCategory;
 
 interface AdminSupportTicketRow {
   id: string;
+  user_id: string;
   name: string;
   email: string;
   category: SupportTicketCategory;
@@ -36,6 +41,7 @@ interface AdminSupportTicketRow {
 
 interface AdminSupportTicketsTableProps {
   initialTickets: AdminSupportTicketRow[];
+  books: { id: string; slug: string; title: string }[];
 }
 
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
@@ -77,9 +83,12 @@ const STATUS_BADGE_STYLES: Record<SupportTicketStatus, string> = {
   chiuso: "bg-zinc-200 text-zinc-700",
 };
 
-export function AdminSupportTicketsTable({ initialTickets }: AdminSupportTicketsTableProps) {
+export function AdminSupportTicketsTable({ initialTickets, books }: AdminSupportTicketsTableProps) {
   const [tickets, setTickets] = useState(initialTickets);
   const [expandedTicketId, setExpandedTicketId] = useState<string | null>(null);
+  const [inspectedUser, setInspectedUser] = useState<AdminUserManagementRow | null>(null);
+  const [inspectedUserId, setInspectedUserId] = useState<string | null>(null);
+  const [userPanelLoading, setUserPanelLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [query, setQuery] = useState("");
@@ -95,6 +104,28 @@ export function AdminSupportTicketsTable({ initialTickets }: AdminSupportTickets
     setStatusSelectionByTicket(
       Object.fromEntries(nextTickets.map((ticket) => [ticket.id, ticket.status])) as Record<string, SupportTicketStatus>,
     );
+  }
+
+  async function openUserPanel(userId: string) {
+    setUserPanelLoading(true);
+    setInspectedUserId(userId);
+    setInspectedUser(null);
+
+    try {
+      const response = await fetch(`/api/admin/users?userId=${encodeURIComponent(userId)}`, { method: "GET" });
+      const json = await response.json();
+
+      if (!response.ok) {
+        throw new Error(json.error ?? "Errore caricamento utente.");
+      }
+
+      setInspectedUser(json.data as AdminUserManagementRow);
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Errore caricamento utente.");
+      setInspectedUserId(null);
+    } finally {
+      setUserPanelLoading(false);
+    }
   }
 
   async function loadTickets() {
@@ -332,15 +363,36 @@ export function AdminSupportTicketsTable({ initialTickets }: AdminSupportTickets
 
             return (
               <div key={ticket.id} className="rounded-2xl border border-zinc-200 bg-white">
-                <button
-                  type="button"
+                <div
+                  role="button"
+                  tabIndex={0}
                   className="flex w-full items-start justify-between gap-3 p-3 text-left sm:items-center"
                   aria-expanded={isExpanded}
                   onClick={() => setExpandedTicketId((current) => (current === ticket.id ? null : ticket.id))}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setExpandedTicketId((current) => (current === ticket.id ? null : ticket.id));
+                    }
+                  }}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="grid gap-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center sm:gap-3">
-                      <p className="text-sm font-semibold leading-6 text-zinc-800 sm:truncate">{ticket.name}</p>
+                      <button
+                        type="button"
+                        className="inline-flex w-fit max-w-full items-center gap-1 rounded-full border border-rose-100 bg-rose-50 px-3 py-1 text-left text-sm font-semibold leading-6 text-rose-800 transition hover:border-rose-200 hover:bg-rose-100"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (ticket.user_id) {
+                            void openUserPanel(ticket.user_id);
+                          }
+                        }}
+                        aria-label={`Apri scheda utente di ${ticket.name}`}
+                        disabled={!ticket.user_id}
+                      >
+                        <span className="truncate">{ticket.name}</span>
+                        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                      </button>
                       <p className="text-xs leading-5 text-zinc-500 sm:truncate sm:text-sm">{ticket.email}</p>
                       <div className="flex items-center gap-2 sm:justify-end">
                         <span className={`rounded-full px-2 py-1 text-xs font-semibold ${STATUS_BADGE_STYLES[ticket.status]}`}>
@@ -359,7 +411,7 @@ export function AdminSupportTicketsTable({ initialTickets }: AdminSupportTickets
                   <ChevronDown
                     className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
                   />
-                </button>
+                </div>
 
                 {isExpanded ? (
                   <div className="border-t border-zinc-200 px-3 py-3">
@@ -449,6 +501,47 @@ export function AdminSupportTicketsTable({ initialTickets }: AdminSupportTickets
           })
         )}
       </div>
+
+      {inspectedUserId ? (
+        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-[rgba(17,24,39,0.45)] p-3 backdrop-blur-sm sm:items-center sm:p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ticket-user-details-title"
+            className="max-h-[88dvh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-rose-100 bg-white p-4 shadow-[0_24px_70px_rgba(0,0,0,0.18)] sm:p-6"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-rose-700">Utente ticket</p>
+                <h3 id="ticket-user-details-title" className="mt-2 font-heading text-2xl font-semibold text-rose-900">
+                  {inspectedUser ? `${inspectedUser.firstName} ${inspectedUser.lastName}`.trim() : "Caricamento utente"}
+                </h3>
+                {inspectedUser ? <p className="mt-1 text-sm text-zinc-600">{inspectedUser.email}</p> : null}
+              </div>
+
+              <Button type="button" variant="secondary" className="shrink-0" onClick={() => setInspectedUserId(null)}>
+                Chiudi
+              </Button>
+            </div>
+
+            <div className="mt-5">
+              {userPanelLoading ? (
+                <p className="text-sm text-zinc-600">Caricamento profilo utente...</p>
+              ) : inspectedUser ? (
+                <AdminUserManagementPanel
+                  user={inspectedUser}
+                  books={books}
+                  onUserUpdated={(nextUser) => {
+                    setInspectedUser(nextUser);
+                  }}
+                />
+              ) : (
+                <p className="text-sm text-zinc-600">Impossibile caricare i dati utente.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </Card>
   );
 }

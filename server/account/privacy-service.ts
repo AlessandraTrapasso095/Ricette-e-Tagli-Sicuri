@@ -10,7 +10,20 @@ const GDPR_DELETE_MARKER = "[GDPR_DELETE_REQUEST]";
 export async function exportUserPrivacyData(userId: string) {
   const admin = createSupabaseAdminClient();
 
-  const [profile, children, userBooks, bonusDownloads, supportTickets, menuSessions, menuMessages, savedMenus, accessAttempts, disclaimers, emailEvents] =
+  const [
+    profile,
+    children,
+    userBooks,
+    bonusDownloads,
+    supportTickets,
+    menuSessions,
+    menuMessages,
+    savedMenus,
+    accessAttempts,
+    disclaimers,
+    emailEvents,
+    auditLogs,
+  ] =
     await Promise.all([
       admin.from("profiles").select("*").eq("id", userId).maybeSingle(),
       admin.from("children").select("*").eq("user_id", userId).order("created_at", { ascending: true }),
@@ -27,6 +40,11 @@ export async function exportUserPrivacyData(userId: string) {
       admin.from("access_attempt_logs").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
       admin.from("disclaimer_acceptances").select("*").eq("user_id", userId).order("accepted_at", { ascending: false }),
       admin.from("user_email_events").select("*").eq("user_id", userId).order("sent_at", { ascending: false }),
+      admin
+        .from("audit_logs")
+        .select("*")
+        .or(`actor_user_id.eq.${userId},entity_id.eq.${userId}`)
+        .order("created_at", { ascending: false }),
     ]);
 
   await admin.from("audit_logs").insert({
@@ -54,6 +72,7 @@ export async function exportUserPrivacyData(userId: string) {
     accessAttemptLogs: accessAttempts.data ?? [],
     disclaimerAcceptances: disclaimers.data ?? [],
     userEmailEvents: emailEvents.data ?? [],
+    auditLogs: auditLogs.data ?? [],
   };
 }
 

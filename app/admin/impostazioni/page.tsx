@@ -7,13 +7,14 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/server/auth/session";
+import { getLatestDataRetentionRunSummary } from "@/server/security/data-retention-service";
 import { getReaderFacingName } from "@/server/settings/app-settings-service";
 
 export default async function AdminImpostazioniPage() {
   const user = await requireAdmin();
   const admin = createSupabaseAdminClient();
   const supabase = await createSupabaseServerClient();
-  const [readerFacingName, settingsResult, profileResult] = await Promise.all([
+  const [readerFacingName, settingsResult, profileResult, latestRetentionRun] = await Promise.all([
     getReaderFacingName(),
     admin.from("app_settings").select("key, value, description, updated_at").order("key"),
     supabase
@@ -23,6 +24,7 @@ export default async function AdminImpostazioniPage() {
       )
       .eq("id", user.id)
       .maybeSingle(),
+    getLatestDataRetentionRunSummary(),
   ]);
 
   const settings = settingsResult.data ?? [];
@@ -55,6 +57,41 @@ export default async function AdminImpostazioniPage() {
         <CardTitle>Privacy e dati</CardTitle>
         <CardDescription>Esporta i dati del tuo account oppure invia una richiesta di cancellazione tracciata.</CardDescription>
         <AccountPrivacyActions />
+      </Card>
+
+      <Card>
+        <CardTitle>Retention dati</CardTitle>
+        <CardDescription>Monitoraggio dell&apos;ultimo cleanup automatico di log, sessioni archiviate e dati tecnici.</CardDescription>
+
+        {latestRetentionRun ? (
+          <div className="mt-4 space-y-3">
+            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
+              <p>
+                <span className="font-semibold text-zinc-900">Ultima esecuzione:</span>{" "}
+                {new Date(latestRetentionRun.createdAt).toLocaleString("it-IT")}
+              </p>
+              <p>
+                <span className="font-semibold text-zinc-900">Tipo:</span>{" "}
+                {latestRetentionRun.action === "data_retention_dry_run" ? "Dry run" : "Cleanup reale"}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              {latestRetentionRun.policies.map((policy) => (
+                <div key={policy.key} className="rounded-2xl border border-zinc-200 p-3 text-sm">
+                  <p className="font-semibold text-zinc-900">{policy.label}</p>
+                  <p className="text-zinc-600">
+                    Cutoff: {new Date(policy.cutoffIso).toLocaleString("it-IT")} • Trovati: {policy.matchedRows} •{" "}
+                    {latestRetentionRun.dryRun ? "Da eliminare" : "Eliminati"}:{" "}
+                    {latestRetentionRun.dryRun ? policy.matchedRows : policy.deletedRows}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-zinc-600">Nessun cleanup retention registrato finora.</p>
+        )}
       </Card>
 
       <Card>

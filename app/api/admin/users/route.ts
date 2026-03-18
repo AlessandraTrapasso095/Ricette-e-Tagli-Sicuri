@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 
 import { adminUserMenuResetSchema, adminUserSuspendSchema } from "@/lib/validation/forms";
 import { getApiUserOrResponse, ensureApiAdminOrResponse } from "@/server/auth/api-auth";
-import { getAdminUsersOverview, resetAdminUserMenuChat, setAdminUserSuspension } from "@/server/admin/admin-service";
+import { getAdminUserOverview, getAdminUsersOverview, resetAdminUserMenuChat, setAdminUserSuspension } from "@/server/admin/admin-service";
 
-export async function GET() {
+export async function GET(request: Request) {
   const { user, unauthorizedResponse } = await getApiUserOrResponse();
   if (!user) {
     return unauthorizedResponse;
@@ -13,6 +13,17 @@ export async function GET() {
   const adminGuard = await ensureApiAdminOrResponse(user.id, user.email);
   if (adminGuard) {
     return adminGuard;
+  }
+
+  const userId = new URL(request.url).searchParams.get("userId");
+
+  if (userId) {
+    const selectedUser = await getAdminUserOverview(userId);
+    if (!selectedUser) {
+      return NextResponse.json({ error: "Utente non trovato" }, { status: 404 });
+    }
+
+    return NextResponse.json({ data: selectedUser });
   }
 
   const users = await getAdminUsersOverview();
