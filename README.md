@@ -265,7 +265,8 @@ Configura almeno una delle due modalità.
 | --- | --- | --- |
 | `EMAIL_LOGO_URL` | No | Logo assoluto per email transazionali. |
 | `SUPPORT_TARGET_EMAIL` | Sì | Casella che riceve i ticket supporto. |
-| `INTERNAL_CRON_SECRET` | Consigliata | Secret Bearer per eseguire il cleanup retention via route interna. |
+| `CRON_SECRET` | Consigliata | Secret usato automaticamente da Vercel Cron Jobs nell'header `Authorization`. |
+| `INTERNAL_CRON_SECRET` | No | Secret alternativo se vuoi invocare la route retention da sistemi esterni non Vercel. |
 
 ## Esempio `.env.local`
 
@@ -294,6 +295,7 @@ SMTP_FROM_NAME="Ricette e Tagli Sicuri"
 
 EMAIL_LOGO_URL=
 SUPPORT_TARGET_EMAIL=ricettetaglisicuri@gmail.com
+CRON_SECRET=
 INTERNAL_CRON_SECRET=
 ```
 
@@ -390,7 +392,7 @@ GET /api/internal/privacy-retention
 Header richiesto:
 
 ```text
-Authorization: Bearer <INTERNAL_CRON_SECRET>
+Authorization: Bearer <CRON_SECRET>
 ```
 
 Dry run:
@@ -398,6 +400,15 @@ Dry run:
 ```text
 GET /api/internal/privacy-retention?dryRun=1
 ```
+
+### Vercel Cron
+
+Il progetto include un cron in [vercel.json](/Users/alessandratrapasso/Desktop/Github/Ricette%20e%20Tagli%20Sicuri/vercel.json):
+
+- path: `/api/internal/privacy-retention`
+- schedule: `15 3 * * *`
+
+Il timing è in UTC. Su Vercel il cron gira solo in produzione.
 
 ## Deploy su Vercel
 
@@ -416,6 +427,7 @@ Replica in Vercel tutte le env necessarie:
 - provider email scelto
 - `EMAIL_LOGO_URL`
 - `SUPPORT_TARGET_EMAIL`
+- `CRON_SECRET`
 - `INTERNAL_CRON_SECRET`
 
 ### Flusso consigliato

@@ -7,15 +7,17 @@ import { runDataRetentionCleanup } from "@/server/security/data-retention-servic
 export const dynamic = "force-dynamic";
 
 function hasValidInternalSecret(request: Request) {
-  const configuredSecret = getEnv("INTERNAL_CRON_SECRET");
-  if (!configuredSecret) {
+  const authorization = request.headers.get("authorization");
+  const token = authorization?.startsWith("Bearer ") ? authorization.slice(7).trim() : null;
+  const configuredSecrets = [getEnv("CRON_SECRET"), getEnv("INTERNAL_CRON_SECRET")].filter(
+    (value): value is string => Boolean(value),
+  );
+
+  if (configuredSecrets.length === 0 || !token) {
     return false;
   }
 
-  const authorization = request.headers.get("authorization");
-  const token = authorization?.startsWith("Bearer ") ? authorization.slice(7).trim() : null;
-
-  return token === configuredSecret;
+  return configuredSecrets.includes(token);
 }
 
 async function executeCleanup(request: Request) {
