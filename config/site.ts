@@ -3,7 +3,7 @@ export const siteConfig = {
   description:
     "Area lettori privata per sbloccare i bonus dei libri, creare menu giornalieri personalizzati e gestire il profilo del tuo bambino.",
   url: process.env.APP_BASE_URL ?? "http://localhost:3000",
-  supportEmail: process.env.SUPPORT_TARGET_EMAIL ?? "supporto@ricetteetaglisicuri.it",
+  supportEmail: process.env.SUPPORT_TARGET_EMAIL ?? "ricettetaglisicuri@gmail.com",
 };
 
 export const defaultMetadata = {

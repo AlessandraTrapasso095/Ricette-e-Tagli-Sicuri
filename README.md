@@ -1,108 +1,105 @@
 # Ricette e Tagli Sicuri
 
-Web app privata per lettori della collana, con accesso verificato per libro, dashboard protetta, bonus PDF riservati, chat menu guidata da business rules e pannello admin.
+Piattaforma per i lettori della collana "Ricette e Tagli Sicuri".
+
+Il progetto include:
+- area pubblica con registrazione, login, pagine legali e FAQ
+- area utente protetta con libri da sbloccare, bonus PDF, profilo bambino, chat menu e supporto
+- pannello admin con utenti, libri, challenge, ticket, comunicazioni e impostazioni
+- backend server-side su route handlers
+- integrazione Supabase per Auth, database, RLS e storage
+- generazione menu con OpenAI guidata da regole business e validazione strutturata
+
+## Funzionalità principali
+
+- Registrazione email/password con conferma account
+- Recupero password con pagina dedicata `nuova password`
+- Dashboard privata per lettori
+- Sblocco libro tramite challenge per pagina/parola chiave
+- Download bonus PDF solo per utenti autorizzati
+- Profilo bambino con età, stile di svezzamento, allergie e alimenti da evitare
+- Chat "Cosa mangiamo oggi?" con:
+  - regole fisse di sicurezza alimentare
+  - differenziazione tra classico, autosvezzamento e misto
+  - massimo 5 sessioni al giorno
+  - reset delle sessioni a mezzanotte in timezone `Europe/Rome`
+  - salvataggio menu e storico sessioni
+- Ticket supporto con conversazione utente/admin
+- Comunicazioni massive da admin con storico invii
+- Preferenze notifiche utente e admin
+- Layout responsive mobile con header e app menu fissi in area utente e admin
 
 ## Stack
 
-- Next.js (App Router) + TypeScript
-- Tailwind CSS
-- Supabase (Auth, PostgreSQL, Storage, RLS)
-- Zod + React Hook Form
-- Route Handlers server-side
-- OpenAI API (chat menu)
-- Resend (email ticket supporto)
-- Vercel-ready
+- `Next.js 16` App Router
+- `React 19`
+- `TypeScript`
+- `Tailwind CSS 4`
+- `Supabase` Auth + Postgres + Storage
+- `Zod` + `react-hook-form`
+- `OpenAI API`
+- `Resend` oppure `SMTP` per email transazionali
+- `Vitest` per test
+- `ESLint`
 
-## Architettura cartelle
+## Struttura del progetto
 
 ```text
 app/
-  (public)/           # landing, login, register, pagine legali
-  dashboard/          # area utente privata
-  admin/              # area admin protetta
-  api/                # route handlers backend
-  auth/callback/      # callback verifica email Supabase
+  (public)/                 landing, login, register, FAQ, privacy, termini
+  admin/                    pannello admin
+  api/                      route handlers backend
+  auth/                     callback auth e reset password
+  dashboard/                area utente privata
 components/
-  ui/                 # componenti riutilizzabili
-  layout/             # shell pubblica/dashboard/admin
-  forms/              # form RHF + Zod
-  dashboard/          # widget dashboard
-config/               # config brand, nav, business-rules
-lib/
-  supabase/           # client browser/server/admin
-  validation/         # schema zod form
-  text/               # normalizzazione risposte challenge
+  dashboard/                widget area lettori
+  forms/                    form e tabelle operative
+  layout/                   shell pubblica, dashboard, admin
+  ui/                       componenti riutilizzabili
+config/
+  auth.ts                   cookie auth e timeout inattività
+  business-rules.ts         regole menu e gruppi ingredienti
+  chat-access.ts            controllo accesso chat per libri sbloccati
+  chat-session.ts           limiti e reset giornaliero sessioni menu
+  navigation.ts             navigazione dashboard/admin
+  notification-preferences.ts
 server/
-  auth/               # guard user/admin
-  books/              # logica sblocco libro + sicurezza
-  bonus/              # accesso bonus e signed url
-  children/           # profilo bambino
-  chat/               # rules engine + schema menu + servizio AI
-  support/            # ticket + invio email
-  admin/              # aggregazioni pannello admin
+  account/                  salvataggio profilo e notifiche account
+  admin/                    aggregazioni e azioni pannello admin
+  auth/                     guard, profilo e email auth
+  books/                    challenge e sblocco libri
+  bonus/                    accesso bonus protetti
+  chat/                     engine menu, catalogo ricette, validatori, accesso
+  children/                 profilo bambino
+  email/                    invio email Resend/SMTP
+  support/                  ticket e conversazione supporto
+lib/
+  env.ts                    validazione env
+  supabase/                 client browser/server/admin
+  timezone/                 utility date e reset giornaliero
+  user-gender.ts            testi dinamici per genere utente
+  validation/               schema Zod
 supabase/
-  migrations/0001_init.sql
-  seed.sql
-tests/
-  *.test.ts
+  migrations/               schema e hardening DB
+  seed.sql                  seed base libri/challenge/bonus/settings
+tests/                      suite vitest
+scripts/
+  upload-bonus-pdfs.mjs     upload bonus PDF in storage Supabase
 ```
 
-## Database Supabase
+## Route principali
 
-La migration `supabase/migrations/0001_init.sql` crea:
+### Area pubblica
 
-- Enum di dominio (`feeding_style`, `support_ticket_status`, `access_attempt_result`, ecc.)
-- Tabelle: `profiles`, `children`, `books`, `book_access_challenges`, `user_books`, `bonus_files`, `bonus_download_logs`, `support_tickets`, `menu_sessions`, `menu_messages`, `saved_menus`, `admin_users`, `access_attempt_logs`, `audit_logs`, `app_settings`
-- Trigger `updated_at`
-- Trigger auto-profilo su `auth.users`
-- Funzione `normalize_text` per confronto robusto challenge
-- Funzione `is_admin`
-- RLS complete su tutte le tabelle
-- Bucket storage privato `bonus-files` + policy di accesso per utenti con libro sbloccato
+- `/`
+- `/login`
+- `/register`
+- `/faq`
+- `/privacy`
+- `/termini`
+- `/disclaimer`
 
-## Seed iniziale
-
-`supabase/seed.sql` inserisce:
-
-- 4 libri iniziali:
-  - Ricette e Tagli Sicuri
-  - Ricette e Svezzamento Classico
-  - Ricette e Autosvezzamento Felice
-  - Colazione e Merenda
-- challenge iniziali con parole segrete e pagine richieste
-- bonus PDF placeholder per ogni libro
-- impostazioni base `book_unlock` e `chat_menu`
-
-## Flussi implementati
-
-### 1) Auth
-
-- Registrazione email+password
-- Invio email conferma account (brandizzata) via API `POST /api/auth/register` quando è configurato almeno un provider applicativo (`RESEND_API_KEY` oppure SMTP)
-- Fallback automatico a email standard Supabase se non è configurato nessun provider applicativo
-- Verifica email via callback `/auth/callback`
-- Email di benvenuto automatica al primo click di conferma (`event=signup-confirmed`, invio una sola volta per utente)
-- Login
-- Reset password
-- Logout
-
-### 2) Sblocco libro
-
-- Pagina `/dashboard/libri`
-- Challenge casuale per libro
-- Verifica server-side con normalizzazione input:
-  - trim
-  - lowercase
-  - Unicode normalize
-  - apostrofi tipografici tollerati
-- Tentativi falliti loggati
-- Cooldown automatico dopo limite tentativi
-- Sblocco persistito in `user_books`
-- Revoca manuale da admin
-
-### 3) Dashboard privata
-
-Pagine:
+### Area utente
 
 - `/dashboard`
 - `/dashboard/libri`
@@ -113,103 +110,98 @@ Pagine:
 - `/dashboard/supporto`
 - `/dashboard/impostazioni`
 
-### 4) Bonus PDF
-
-- Lista bonus disponibili solo su libri sbloccati
-- Download via route server `/api/bonus/[bonusId]/download`
-- Signed URL breve durata
-- Tracking in `bonus_download_logs`
-
-### 5) Profilo bambino
-
-- Form RHF + Zod
-- Dati: nome, età/data nascita, stile svezzamento, allergie, esclusioni, alimenti introdotti, note
-- Modello pronto per multi-bimbo (schema già relazionale)
-
-### 6) Chat menu guidata
-
-- Endpoint `/api/chat-menu`
-- Regole centralizzate in `config/business-rules.ts` e `server/chat/rules-engine.ts`
-- Output strutturato JSON (schema definito) + validazione Zod
-- Salvataggio sessioni/messaggi/menu
-- Pagine:
-  - `/dashboard/chat-menu`
-  - `/dashboard/menu-salvati`
-
-### 7) Supporto
-
-- Form ticket `/dashboard/supporto`
-- Salvataggio DB `support_tickets`
-- Email admin + conferma utente via Resend (se configurato)
-
-### 8) Admin
-
-Pagine:
+### Area admin
 
 - `/admin`
-- `/admin/libri`
-- `/admin/bonus`
 - `/admin/utenti`
+- `/admin/libri`
+- `/admin/libri-sbloccati`
 - `/admin/challenge`
-- `/admin/supporto`
+- `/admin/accessi-attivi`
+- `/admin/tentativi-falliti`
+- `/admin/ticket`
+- `/admin/comunicazione-utenti`
+- `/admin/bonus`
 - `/admin/impostazioni`
 
-Funzioni operative:
+## API principali
 
-- Gestione libri
-- Creazione challenge senza toccare codice
-- Toggle challenge attiva/disattiva
-- Visualizzazione utenti + tentativi falliti
-- Revoca accessi libro
-- Consultazione ticket supporto
-- Consultazione settings
+- `POST /api/auth/register`
+- `POST /api/auth/logout`
+- `GET /api/menu/sessions`
+- `POST /api/chat-menu`
+- `GET|POST /api/menu/saved`
+- `GET|POST /api/children/profile`
+- `POST /api/support/tickets`
+- `POST /api/support/tickets/[ticketId]/reply`
+- `POST /api/support/tickets/[ticketId]/read`
+- `GET /api/bonus/[bonusId]/download`
+- `POST /api/books/[slug]/unlock`
+- `POST /api/books/[slug]/challenge`
+- `POST /api/admin/broadcast`
+- `GET|POST /api/admin/users`
+- `GET|POST /api/admin/support`
 
-## Milestone
+## Requisiti
 
-### MVP (coperto)
-
-1. Setup progetto e architettura
-2. Schema DB + RLS + seed
-3. Auth + callback
-4. Sblocco libri con challenge robuste
-5. Dashboard privata con pagine core
-6. Bonus protetti con signed URL
-7. Profilo bambino
-8. Chat menu guidata con persistenza
-9. Ticket supporto + email transazionali
-10. Admin panel operativo base
-
-### Post-MVP
-
-1. Watermark dinamico PDF con email utente
-2. Moderazione/curation menu AI e libreria template
-3. Gestione multi-bimbo avanzata in UI
-4. Analytics eventi e funnel completo
-5. Gestione ruoli admin granulari
-6. E2E tests Playwright
-7. Billing/subscription per area premium
+- `Node.js 20+`
+- `npm`
+- progetto Supabase attivo
+- chiavi OpenAI valide per la chat menu
+- almeno un provider email configurato:
+  - `Resend`
+  - oppure `SMTP`
 
 ## Setup locale
 
-1. Copia `.env.example` in `.env.local` e compila le variabili.
-2. Installa dipendenze:
+### 1. Installa dipendenze
 
 ```bash
 npm install
 ```
 
-3. Esegui migration + seed su Supabase (SQL editor o CLI):
+### 2. Crea le env locali
 
-- `supabase/migrations/0001_init.sql`
-- `supabase/seed.sql`
+```bash
+cp .env.example .env.local
+```
 
-4. Avvia sviluppo:
+Compila poi i valori reali in `.env.local`.
+
+### 3. Prepara Supabase
+
+Applica le migration in ordine:
+
+```text
+supabase/migrations/0001_init.sql
+supabase/migrations/0002_challenge_prompt_grassetto.sql
+supabase/migrations/0003_profiles_insert_policy.sql
+supabase/migrations/0004_disclaimer_acceptances.sql
+supabase/migrations/0005_challenge_prompt_rosso.sql
+supabase/migrations/0006_challenge_prompt_minuscolo.sql
+supabase/migrations/0007_user_email_events.sql
+supabase/migrations/0008_notification_preferences.sql
+supabase/migrations/0009_harden_app_settings_policy.sql
+supabase/migrations/0010_profiles_gender.sql
+```
+
+Poi applica:
+
+```text
+supabase/seed.sql
+```
+
+Puoi farlo:
+- via `SQL Editor` di Supabase
+- oppure via CLI se il progetto è già linkato
+
+### 4. Avvia in sviluppo
 
 ```bash
 npm run dev
 ```
 
-## Test e quality
+### 5. Controlli di qualità
 
 ```bash
 npm run lint
@@ -217,15 +209,252 @@ npm run typecheck
 npm test
 ```
 
-## Note email registrazione
+## Variabili ambiente
 
-- Mittente predefinito applicazione: `ricettetaglisicuri@gmail.com` (override opzionale con `RESEND_FROM_EMAIL`).
-- Per aprire correttamente i link di conferma da telefono, imposta `AUTH_REDIRECT_BASE_URL` al dominio pubblico (es. `https://ricette-tagli-sicuri.it`).
-- Per usare conferma account brandizzata e mail di benvenuto è necessario configurare almeno un provider:
-  - `RESEND_API_KEY`
-  - oppure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`
-- migration `supabase/migrations/0007_user_email_events.sql` applicata.
+### Base app
 
-## Deploy
+| Variabile | Obbligatoria | Descrizione |
+| --- | --- | --- |
+| `APP_BASE_URL` | Sì | URL base dell’app. In locale es. `http://localhost:3000`. |
+| `AUTH_REDIRECT_BASE_URL` | Consigliata | Override esplicito per link auth/callback nelle email. |
+| `NEXT_PUBLIC_APP_URL` | Consigliata | URL pubblico usato dal form reset password client-side. In produzione deve puntare al dominio live. |
 
-App pronta per Vercel (variabili ambiente in Project Settings + connessione Supabase).
+### Supabase
+
+| Variabile | Obbligatoria | Descrizione |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Sì | URL del progetto Supabase. |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Sì | Anon key pubblica. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Sì | Service role key server-side. Non esporla sul client. |
+
+### OpenAI
+
+| Variabile | Obbligatoria | Descrizione |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | Sì | Chiave API per la generazione menu. |
+| `OPENAI_MODEL` | No | Default: `gpt-4.1-mini`. |
+
+### Email
+
+Configura almeno una delle due modalità.
+
+#### Resend
+
+| Variabile | Obbligatoria | Descrizione |
+| --- | --- | --- |
+| `RESEND_API_KEY` | Sì, se usi Resend | API key Resend. |
+| `RESEND_FROM_EMAIL` | Sì, se usi Resend | Mittente verificato. |
+
+#### SMTP
+
+| Variabile | Obbligatoria | Descrizione |
+| --- | --- | --- |
+| `SMTP_HOST` | Sì, se usi SMTP | Host SMTP. |
+| `SMTP_PORT` | Sì, se usi SMTP | Porta SMTP. |
+| `SMTP_USER` | Sì, se usi SMTP | Username SMTP. |
+| `SMTP_PASSWORD` | Sì, se usi SMTP | Password o app password. |
+| `SMTP_SECURE` | No | `true` o `false`. Default coerente con la porta. |
+| `SMTP_FROM_EMAIL` | No | Mittente SMTP. |
+| `SMTP_FROM_NAME` | No | Nome mittente. |
+
+### Branding e supporto
+
+| Variabile | Obbligatoria | Descrizione |
+| --- | --- | --- |
+| `EMAIL_LOGO_URL` | No | Logo assoluto per email transazionali. |
+| `SUPPORT_TARGET_EMAIL` | Sì | Casella che riceve i ticket supporto. |
+
+## Esempio `.env.local`
+
+```env
+APP_BASE_URL=http://localhost:3000
+AUTH_REDIRECT_BASE_URL=
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4.1-mini
+
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=ricettetaglisicuri@gmail.com
+
+SMTP_HOST=
+SMTP_PORT=465
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_SECURE=true
+SMTP_FROM_EMAIL=ricettetaglisicuri@gmail.com
+SMTP_FROM_NAME="Ricette e Tagli Sicuri"
+
+EMAIL_LOGO_URL=
+SUPPORT_TARGET_EMAIL=ricettetaglisicuri@gmail.com
+```
+
+## Supabase: configurazione auth
+
+### URL Configuration
+
+In `Authentication > URL Configuration` imposta:
+
+- `Site URL`: dominio pubblico dell’app
+- `Redirect URLs`: almeno
+  - `/auth/callback`
+  - `/auth/reset-password`
+
+Esempio produzione:
+
+```text
+https://tuo-dominio.it/auth/callback
+https://tuo-dominio.it/auth/reset-password
+```
+
+### Email template Supabase
+
+Le email di conferma e reset password usano il flusso Supabase Auth. I template vanno gestiti nella dashboard Supabase.
+
+Il progetto usa invece il provider applicativo `Resend/SMTP` per:
+- email di benvenuto
+- notifiche supporto
+- comunicazioni utenti
+- fallback/branding in alcuni flussi auth
+
+## Bonus PDF
+
+I bonus sono in storage privato Supabase e vengono distribuiti tramite signed URL server-side.
+
+Script disponibile:
+
+```bash
+npm run bonus:upload
+```
+
+Nota:
+- lo script `scripts/upload-bonus-pdfs.mjs` usa un `SOURCE_ROOT` locale hardcoded
+- prima di eseguirlo su un’altra macchina va aggiornato il path sorgente
+
+## Chat menu: regole operative
+
+- Accessibile solo se l’utente ha sbloccato almeno uno dei libri abilitati
+- Max `5` sessioni al giorno
+- Reset sessioni a mezzanotte `Europe/Rome`
+- Le modifiche tipo `no pera`, `senza latticini`, `cambia la cena` agiscono sulla sessione attiva
+- Le nuove richieste generano nuove sessioni fino al limite giornaliero
+- Il motore applica:
+  - vincoli di svezzamento
+  - allergie/intolleranze
+  - alimenti da evitare
+  - esclusioni libere scritte in chat
+  - validazione del menu prima del salvataggio
+
+## Sicurezza
+
+Il progetto include già:
+
+- RLS su tabelle Supabase
+- header di sicurezza HTTP in `next.config.ts`
+- `no-store` su `/dashboard`, `/admin` e `/api`
+- guard lato server per utente, admin, disclaimer e accesso chat
+- signed URL per bonus PDF
+- invio ticket con email utente forzata lato server
+- escaping HTML nelle email transazionali
+
+## Deploy su Vercel
+
+### Variabili ambiente da configurare
+
+Replica in Vercel tutte le env necessarie:
+
+- `APP_BASE_URL`
+- `AUTH_REDIRECT_BASE_URL`
+- `NEXT_PUBLIC_APP_URL`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- provider email scelto
+- `EMAIL_LOGO_URL`
+- `SUPPORT_TARGET_EMAIL`
+
+### Flusso consigliato
+
+1. push su branch/deploy target
+2. deploy Vercel
+3. verifica env
+4. verifica auth redirect URL su Supabase
+5. smoke test su produzione:
+   - registrazione
+   - conferma email
+   - login
+   - reset password
+   - sblocco libro
+   - download bonus
+   - chat menu
+   - ticket supporto
+   - risposta admin
+   - comunicazione utenti
+
+## Troubleshooting rapido
+
+### "Nessun provider email configurato"
+
+Manca una configurazione valida tra:
+- `RESEND_API_KEY`
+- oppure set SMTP completo
+
+### Reset password rimanda alla pagina sbagliata
+
+Controlla:
+- `NEXT_PUBLIC_APP_URL`
+- `APP_BASE_URL`
+- `AUTH_REDIRECT_BASE_URL`
+- `Site URL` e `Redirect URLs` in Supabase
+
+### La chat menu non parte
+
+Controlla che l’utente abbia sbloccato uno di questi libri:
+- `ricette-e-tagli-sicuri`
+- `ricette-e-svezzamento-classico`
+- `ricette-e-autosvezzamento-felice`
+
+`Colazione e Merenda` non abilita la chat.
+
+### I bonus non risultano scaricabili
+
+Verifica:
+- `user_books.status = active`
+- record `bonus_files`
+- file presenti nel bucket `bonus-files`
+
+## Script disponibili
+
+```bash
+npm run dev
+npm run build
+npm run start
+npm run lint
+npm run typecheck
+npm test
+npm run test:watch
+npm run bonus:upload
+```
+
+## Note operative
+
+- `.env.local` non va committato
+- `.next/` non va considerata fonte di verità
+- se cambi schema DB, aggiungi sempre una migration nuova invece di modificare quelle già applicate
+- se cambi flussi auth/email, riallinea sempre:
+  - env locali
+  - env Vercel
+  - template Supabase
+  - redirect URLs Supabase
+
+## Stato del progetto
+
+Progetto pensato per produzione su Vercel con Supabase come backend principale e provider email esterno.
+
+Il README è volutamente operativo: se aggiorni flussi, env, route o migrazioni, aggiorna anche questo file.

@@ -301,7 +301,7 @@ export async function createSupportTicket(input: CreateSupportTicketInput) {
     content: input.message.trim(),
   });
 
-  const supportTarget = getEnv("SUPPORT_TARGET_EMAIL") ?? "supporto@ricetteetaglisicuri.it";
+  const supportTarget = getEnv("SUPPORT_TARGET_EMAIL") ?? "ricettetaglisicuri@gmail.com";
   const safeBookName = bookTitle ?? "Non specificato";
   const safeName = escapeHtml(input.name);
   const safeEmail = escapeHtml(input.email);
@@ -628,7 +628,7 @@ export async function replyToSupportTicket(input: ReplyToSupportTicketInput) {
     content: trimmedMessage,
   });
 
-  const supportTarget = getEnv("SUPPORT_TARGET_EMAIL") ?? "supporto@ricetteetaglisicuri.it";
+  const supportTarget = getEnv("SUPPORT_TARGET_EMAIL") ?? "ricettetaglisicuri@gmail.com";
   const safeName = escapeHtml(updated.name);
   const safeEmail = escapeHtml(updated.email);
   const safeMessage = escapeHtmlWithLineBreaks(trimmedMessage);
