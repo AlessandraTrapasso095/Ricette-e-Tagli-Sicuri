@@ -1,8 +1,7 @@
 import "server-only";
 
-import { differenceInMonths } from "date-fns";
-
 import { AUTH_INACTIVITY_TIMEOUT_MS } from "@/config/auth";
+import { computeAgeInMonthsFromBirthDate } from "@/lib/timezone/age-in-months";
 import { READER_BOOK_RECOMMENDATIONS, type RecommendedBook } from "@/config/recommended-books";
 import { normalizeBookAnswer } from "@/lib/text/normalize-answer";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -136,12 +135,7 @@ function getChildAgeMonths(child: ChildRow | null) {
     return null;
   }
 
-  const birthDate = new Date(child.birth_date);
-  if (Number.isNaN(birthDate.getTime())) {
-    return null;
-  }
-
-  return Math.max(0, differenceInMonths(new Date(), birthDate));
+  return computeAgeInMonthsFromBirthDate(child.birth_date);
 }
 
 async function listAllAuthUsers() {

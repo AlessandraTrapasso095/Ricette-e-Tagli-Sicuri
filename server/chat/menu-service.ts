@@ -7,6 +7,7 @@ import { businessRulesConfig } from "@/config/business-rules";
 import { MENU_SESSION_MAX_DAILY, MENU_SESSION_RESET_TIMEZONE } from "@/config/chat-session";
 import { getEnv } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { computeAgeInMonthsFromBirthDate } from "@/lib/timezone/age-in-months";
 import { getStartOfDayInTimeZone } from "@/lib/timezone/day-boundary";
 import { getPrimaryChildProfile } from "@/server/children/child-service";
 import { ensureUserHasChatAccess } from "@/server/chat/chat-access";
@@ -24,6 +25,7 @@ import {
   hasCompleteMeals,
   type MenuPolicyContext,
 } from "@/server/chat/rules-engine";
+import type { ChildProfile } from "@/types/domain";
 
 const DEFAULT_CHAT_MODEL = "gpt-4.1-mini";
 type AdminClient = ReturnType<typeof createSupabaseAdminClient>;
@@ -72,6 +74,31 @@ type RequestedDishMode =
 
 function getMenuDayStartIso() {
   return getStartOfDayInTimeZone(new Date(), MENU_SESSION_RESET_TIMEZONE).toISOString();
+}
+
+function syncMenuAgeWithChildProfile(menu: DailyMenuSchema, child: ChildProfile | null) {
+  if (!child) {
+    return menu;
+  }
+
+  const ageMonths =
+    child.age_mode === "months"
+      ? child.age_months
+      : child.birth_date
+        ? computeAgeInMonthsFromBirthDate(child.birth_date)
+        : null;
+
+  if (ageMonths === menu.childProfileSummary.ageMonths) {
+    return menu;
+  }
+
+  return {
+    ...menu,
+    childProfileSummary: {
+      ...menu.childProfileSummary,
+      ageMonths,
+    },
+  };
 }
 
 async function archiveExpiredDailySessions(admin: AdminClient, userId: string, dayStartIso: string) {
@@ -1877,7 +1904,20 @@ export async function getSessionMessages(userId: string, sessionId: string) {
     throw error;
   }
 
-  return data ?? [];
+  const child = await getPrimaryChildProfile(userId);
+
+  return (data ?? []).map((message) => {
+    const parsedMenu = dailyMenuSchema.safeParse(message.menu_payload);
+
+    if (!parsedMenu.success) {
+      return message;
+    }
+
+    return {
+      ...message,
+      menu_payload: syncMenuAgeWithChildProfile(parsedMenu.data, child),
+    };
+  });
 }
 
 export async function generateMenuFromPrompt(params: {

@@ -1,7 +1,6 @@
-import { differenceInMonths } from "date-fns";
-
 import { businessRulesConfig } from "@/config/business-rules";
 import type { ChildProfile, DailyMenuChildProfileSummary, FeedingStyle } from "@/types/domain";
+import { computeAgeInMonthsFromBirthDate } from "@/lib/timezone/age-in-months";
 import { buildUserPromptContext, normalizeFreeText } from "@/server/chat/input-normalizer";
 
 export type AgeStage = "under_6" | "6_8" | "8_10" | "10_12" | "12_24" | "24_plus" | "unknown";
@@ -29,8 +28,7 @@ export function computeAgeInMonths(child: ChildProfile): number | null {
     return null;
   }
 
-  const age = differenceInMonths(new Date(), new Date(child.birth_date));
-  return age >= 0 ? age : null;
+  return computeAgeInMonthsFromBirthDate(child.birth_date);
 }
 
 export function getAgeStage(ageMonths: number | null): AgeStage {
