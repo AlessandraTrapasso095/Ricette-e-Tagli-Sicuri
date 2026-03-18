@@ -20,10 +20,10 @@ export async function POST(request: Request) {
     }
 
     const securityReview = evaluateChatPromptSecurity(parsed.data.prompt);
-    if (!securityReview.allowed) {
+    if (securityReview.decision !== "allow") {
       await logChatSecurityEvent({
         userId: user.id,
-        action: "chat_prompt_blocked",
+        action: securityReview.decision === "escalate" ? "chat_prompt_escalated" : "chat_prompt_blocked",
         details: {
           prompt: parsed.data.prompt,
           matchedRules: securityReview.matchedRules,

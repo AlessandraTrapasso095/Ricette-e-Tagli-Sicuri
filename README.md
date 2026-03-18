@@ -27,6 +27,8 @@ Il progetto include:
 - Ticket supporto con conversazione utente/admin
 - Comunicazioni massive da admin con storico invii
 - Preferenze notifiche utente e admin
+- Export dati privacy e richiesta cancellazione account
+- Guard di sicurezza sulla chat menu con filtro input/output e audit log
 - Layout responsive mobile con header e app menu fissi in area utente e admin
 
 ## Stack
@@ -263,6 +265,7 @@ Configura almeno una delle due modalità.
 | --- | --- | --- |
 | `EMAIL_LOGO_URL` | No | Logo assoluto per email transazionali. |
 | `SUPPORT_TARGET_EMAIL` | Sì | Casella che riceve i ticket supporto. |
+| `INTERNAL_CRON_SECRET` | Consigliata | Secret Bearer per eseguire il cleanup retention via route interna. |
 
 ## Esempio `.env.local`
 
@@ -291,6 +294,7 @@ SMTP_FROM_NAME="Ricette e Tagli Sicuri"
 
 EMAIL_LOGO_URL=
 SUPPORT_TARGET_EMAIL=ricettetaglisicuri@gmail.com
+INTERNAL_CRON_SECRET=
 ```
 
 ## Supabase: configurazione auth
@@ -360,6 +364,40 @@ Il progetto include già:
 - signed URL per bonus PDF
 - invio ticket con email utente forzata lato server
 - escaping HTML nelle email transazionali
+- filtro sicurezza sulla chat menu per prompt fuori dominio, prompt tecnici e richieste sensibili
+- sanitizzazione dell'output AI per evitare fughe accidentali di email, URL o token
+- audit log per eventi sicurezza chat, export dati e richieste privacy
+
+## Privacy e retention
+
+- Da `Impostazioni > Privacy e dati` l'utente può:
+  - esportare una copia JSON dei propri dati
+  - inviare una richiesta di cancellazione account
+- Cleanup automatico previsto:
+  - sessioni chat archiviate: 30 giorni
+  - tentativi challenge e log accesso: 90 giorni
+  - log download bonus: 180 giorni
+  - eventi email transazionali: 365 giorni
+
+### Route interna cleanup retention
+
+Route:
+
+```text
+GET /api/internal/privacy-retention
+```
+
+Header richiesto:
+
+```text
+Authorization: Bearer <INTERNAL_CRON_SECRET>
+```
+
+Dry run:
+
+```text
+GET /api/internal/privacy-retention?dryRun=1
+```
 
 ## Deploy su Vercel
 
@@ -378,6 +416,7 @@ Replica in Vercel tutte le env necessarie:
 - provider email scelto
 - `EMAIL_LOGO_URL`
 - `SUPPORT_TARGET_EMAIL`
+- `INTERNAL_CRON_SECRET`
 
 ### Flusso consigliato
 

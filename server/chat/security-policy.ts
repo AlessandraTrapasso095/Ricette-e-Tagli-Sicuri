@@ -2,12 +2,13 @@ import type { DailyMenuSchema } from "@/server/chat/menu-schema";
 
 type ChatSecurityAction =
   | "chat_prompt_blocked"
+  | "chat_prompt_escalated"
   | "chat_prompt_flagged"
   | "chat_output_redacted"
   | "chat_output_fallback";
 
 interface ChatSecurityReview {
-  allowed: boolean;
+  decision: "allow" | "block" | "escalate";
   reason: string | null;
   matchedRules: string[];
 }
@@ -40,6 +41,23 @@ const INPUT_RULES = [
   {
     id: "encoded_payload",
     regex: /(?:[A-Za-z0-9+/]{80,}={0,2})/,
+  },
+] as const;
+
+const ESCALATION_RULES = [
+  {
+    id: "medical_emergency",
+    regex:
+      /\b(soffoca|soffocamento|non respira|difficolt[aà]\s+respiratoria|anafilassi|shock|pronto soccorso|118|emergenza|reazione allergica grave)\b/i,
+    reason:
+      "Per sintomi, emergenze o possibili reazioni allergiche non usare la chat menu. Contatta subito il pediatra, il pronto soccorso o il 118.",
+  },
+  {
+    id: "clinical_advice",
+    regex:
+      /\b(farmaco|medicina|dosaggio|febbre alta|vomito continuo|diarrea persistente|convulsioni|saturazione|antibiotico)\b/i,
+    reason:
+      "Per dubbi clinici o sanitari non usare la chat menu. Contatta il pediatra o un professionista sanitario.",
   },
 ] as const;
 
@@ -105,18 +123,28 @@ function sanitizeStringField(value: string, fieldPath: string, matchedRules: Set
 
 export function evaluateChatPromptSecurity(prompt: string): ChatSecurityReview {
   const normalized = normalizePrompt(prompt);
+  const escalationMatch = ESCALATION_RULES.find((rule) => rule.regex.test(normalized));
+
+  if (escalationMatch) {
+    return {
+      decision: "escalate",
+      reason: escalationMatch.reason,
+      matchedRules: [escalationMatch.id],
+    };
+  }
+
   const matchedRules = INPUT_RULES.filter((rule) => rule.regex.test(normalized)).map((rule) => rule.id);
 
   if (matchedRules.length === 0) {
     return {
-      allowed: true,
+      decision: "allow",
       reason: null,
       matchedRules: [],
     };
   }
 
   return {
-    allowed: false,
+    decision: "block",
     reason:
       "La chat menu accetta solo richieste sul menu del bambino. Non inviare link, credenziali, istruzioni tecniche o richieste fuori ambito.",
     matchedRules,

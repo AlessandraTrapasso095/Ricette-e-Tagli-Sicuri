@@ -1,4 +1,5 @@
 import { Card } from "@/components/ui/card";
+import { DATA_RETENTION_POLICIES } from "@/config/privacy-retention";
 import { siteConfig } from "@/config/site";
 
 export const metadata = {
@@ -7,9 +8,8 @@ export const metadata = {
 
 const retentionItems = [
   "Dati profilo e accesso: per tutta la durata dell'account e fino alla richiesta di cancellazione o chiusura del servizio.",
-  "Profilo bambino, menu salvati, sessioni chat e ticket supporto: finché necessari a fornire le funzioni richieste dall'utente e comunque soggetti a revisione periodica interna.",
-  "Log tecnici e di sicurezza: conservati per finalità di sicurezza, audit e prevenzione abusi per il tempo strettamente necessario alla tutela del servizio.",
-  "Email transazionali e relativi eventi: conservati per motivi amministrativi, di sicurezza e tracciabilità operativa.",
+  "Profilo bambino, menu salvati e ticket supporto: finché necessari a fornire le funzioni richieste dall'utente e comunque soggetti a revisione periodica interna.",
+  ...DATA_RETENTION_POLICIES.map((policy) => policy.privacyDescription),
 ] as const;
 
 const rightsItems = [
