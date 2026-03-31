@@ -1757,30 +1757,38 @@ async function generateDailyMenuWithOpenAI(params: {
   let lastIssues: string[] = [];
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
-    const response = await client.responses.create({
-      model: getEnv("OPENAI_MODEL") ?? DEFAULT_CHAT_MODEL,
-      input: [
-        {
-          role: "system",
-          content: [{ type: "input_text", text: params.systemPrompt }],
-        },
-        {
-          role: "user",
-          content: [{ type: "input_text", text: attemptPrompt }],
-        },
-      ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "daily_menu",
-          schema: dailyMenuJsonSchema,
-          strict: true,
-        },
-      },
-    });
+    let outputText = "";
 
     try {
-      const outputText = response.output_text;
+      const response = await client.responses.create({
+        model: getEnv("OPENAI_MODEL") ?? DEFAULT_CHAT_MODEL,
+        input: [
+          {
+            role: "system",
+            content: [{ type: "input_text", text: params.systemPrompt }],
+          },
+          {
+            role: "user",
+            content: [{ type: "input_text", text: attemptPrompt }],
+          },
+        ],
+        text: {
+          format: {
+            type: "json_schema",
+            name: "daily_menu",
+            schema: dailyMenuJsonSchema,
+            strict: true,
+          },
+        },
+      });
+
+      outputText = response.output_text;
+    } catch {
+      lastIssues = ["Provider AI momentaneamente non disponibile: genero un menu di fallback coerente con le regole salvate."];
+      continue;
+    }
+
+    try {
       const parsed = dailyMenuSchema.parse(JSON.parse(outputText));
       const adjustedMenu = applyForcedAdjustments(
         parsed,

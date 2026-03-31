@@ -45,6 +45,8 @@ export default function ResetPasswordPage() {
       const currentUrl = new URL(window.location.href);
       const hashParams = new URLSearchParams(currentUrl.hash.replace(/^#/, ""));
       const code = currentUrl.searchParams.get("code");
+      const tokenHash = currentUrl.searchParams.get("token_hash");
+      const recoveryType = currentUrl.searchParams.get("type");
       const accessToken = hashParams.get("access_token");
       const refreshToken = hashParams.get("refresh_token");
 
@@ -52,6 +54,14 @@ export default function ResetPasswordPage() {
 
       if (code) {
         const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+        if (!error) {
+          session = data.session ?? null;
+        }
+      } else if (tokenHash && recoveryType === "recovery") {
+        const { data, error } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: "recovery",
+        });
         if (!error) {
           session = data.session ?? null;
         }
