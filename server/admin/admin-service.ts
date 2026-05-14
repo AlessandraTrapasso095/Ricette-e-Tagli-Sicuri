@@ -75,6 +75,8 @@ interface AuthUserLike {
   email?: string | null;
   last_sign_in_at?: string | null;
   banned_until?: string | null;
+  created_at?: string | null;
+  user_metadata?: Record<string, unknown> | null;
 }
 
 interface SuggestedBookRow {
@@ -138,6 +140,16 @@ function getChildAgeMonths(child: ChildRow | null) {
   return computeAgeInMonthsFromBirthDate(child.birth_date);
 }
 
+function chunkArray<T>(items: T[], chunkSize: number) {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < items.length; index += chunkSize) {
+    chunks.push(items.slice(index, index + chunkSize));
+  }
+
+  return chunks;
+}
+
 async function listAllAuthUsers() {
   const admin = createSupabaseAdminClient();
   const users: AuthUserLike[] = [];
@@ -159,6 +171,36 @@ async function listAllAuthUsers() {
   }
 
   return users;
+}
+
+async function listAllProfiles() {
+  const admin = createSupabaseAdminClient();
+  const rows: ProfileRow[] = [];
+  const pageSize = 1000;
+
+  for (let page = 0; page <= 50; page += 1) {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, error } = await admin
+      .from("profiles")
+      .select("id, email, full_name, created_at")
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    if (error) {
+      throw error;
+    }
+
+    const pageRows = (data ?? []) as ProfileRow[];
+    rows.push(...pageRows);
+
+    if (pageRows.length < pageSize) {
+      break;
+    }
+  }
+
+  return rows;
 }
 
 function isUserActiveNow(authUser: AuthUserLike | null) {
@@ -229,35 +271,43 @@ async function getProfilesMap(userIds: string[]) {
   }
 
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin.from("profiles").select("id, email, full_name, created_at").in("id", userIds);
+  const rows: ProfileRow[] = [];
 
-  if (error) {
-    throw error;
+  for (const chunk of chunkArray(userIds, 200)) {
+    const { data, error } = await admin.from("profiles").select("id, email, full_name, created_at").in("id", chunk);
+
+    if (error) {
+      throw error;
+    }
+
+    rows.push(...((data ?? []) as ProfileRow[]));
   }
 
-  return new Map(((data ?? []) as ProfileRow[]).map((profile) => [profile.id, profile]));
+  return new Map(rows.map((profile) => [profile.id, profile]));
 }
 
 export async function getAdminStats() {
   const admin = createSupabaseAdminClient();
 
-  const [usersRes, unlockRes, ticketsRes, attemptsRes] = await Promise.all([
+  const [profilesRes, unlockRes, ticketsRes, attemptsRes] = await Promise.all([
     admin.from("profiles").select("id", { count: "exact", head: true }),
     admin.from("user_books").select("id", { count: "exact", head: true }).eq("status", "active"),
     admin.from("support_tickets").select("id", { count: "exact", head: true }).eq("status", "inviato"),
     admin.from("access_attempt_logs").select("id", { count: "exact", head: true }).eq("result", "failed"),
   ]);
 
+  let totalUsers = profilesRes.count ?? 0;
   let activeUsers = 0;
   try {
     const authUsers = await listAllAuthUsers();
+    totalUsers = authUsers.length;
     activeUsers = authUsers.filter((authUser) => isUserActiveNow(authUser)).length;
   } catch {
     activeUsers = 0;
   }
 
   return {
-    users: usersRes.count ?? 0,
+    users: totalUsers,
     unlockedBooks: unlockRes.count ?? 0,
     activeUsers,
     pendingTickets: ticketsRes.count ?? 0,
@@ -613,35 +663,71 @@ export async function toggleChallengeStatus(challengeId: string, isActive: boole
 
 export async function getAdminUsersOverview() {
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin
-    .from("profiles")
-    .select("id, email, full_name, created_at")
-    .order("created_at", { ascending: false })
-    .limit(500);
+  const profiles = await listAllProfiles();
+  let authUsers: AuthUserLike[] = [];
 
-  if (error) {
-    throw error;
+  try {
+    authUsers = await listAllAuthUsers();
+  } catch {
+    authUsers = [];
   }
 
-  const profiles = (data ?? []) as ProfileRow[];
-  if (profiles.length === 0) {
+  if (profiles.length === 0 && authUsers.length === 0) {
     return [];
   }
 
-  const userIds = profiles.map((user) => user.id);
+  const profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
+  const authUsersById = new Map(authUsers.map((authUser) => [authUser.id, authUser]));
 
-  const [childrenRes, unlockedRes, failedRes] = await Promise.all([
-    admin
-      .from("children")
-      .select("id, user_id, name, age_mode, birth_date, age_months, feeding_style, is_primary, created_at")
-      .in("user_id", userIds),
-    admin.from("user_books").select("user_id, book_id, status").in("user_id", userIds).eq("status", "active"),
-    admin.from("access_attempt_logs").select("user_id, result").in("user_id", userIds).eq("result", "failed"),
-  ]);
+  const users = [...new Set([...authUsers.map((user) => user.id), ...profiles.map((user) => user.id)])]
+    .map((userId) => {
+      const profile = profilesById.get(userId) ?? null;
+      const authUser = authUsersById.get(userId) ?? null;
+      const metadataFullName =
+        typeof authUser?.user_metadata?.full_name === "string" ? authUser.user_metadata.full_name.trim() : null;
 
-  const children = (childrenRes.data ?? []) as ChildRow[];
+      return {
+        id: userId,
+        email: profile?.email ?? authUser?.email ?? `${userId}@local.invalid`,
+        full_name: profile?.full_name ?? metadataFullName ?? null,
+        created_at: profile?.created_at ?? authUser?.created_at ?? new Date(0).toISOString(),
+      } satisfies ProfileRow;
+    })
+    .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime());
+
+  const userIds = users.map((user) => user.id);
+
+  const childrenRows: ChildRow[] = [];
+  const unlockedRows: UserUnlockedBookRow[] = [];
+  const failedRows: { user_id: string; result: string }[] = [];
+
+  for (const chunk of chunkArray(userIds, 200)) {
+    const [childrenRes, unlockedRes, failedRes] = await Promise.all([
+      admin
+        .from("children")
+        .select("id, user_id, name, age_mode, birth_date, age_months, feeding_style, is_primary, created_at")
+        .in("user_id", chunk),
+      admin.from("user_books").select("user_id, book_id, status").in("user_id", chunk).eq("status", "active"),
+      admin.from("access_attempt_logs").select("user_id, result").in("user_id", chunk).eq("result", "failed"),
+    ]);
+
+    if (childrenRes.error) {
+      throw childrenRes.error;
+    }
+    if (unlockedRes.error) {
+      throw unlockedRes.error;
+    }
+    if (failedRes.error) {
+      throw failedRes.error;
+    }
+
+    childrenRows.push(...((childrenRes.data ?? []) as ChildRow[]));
+    unlockedRows.push(...((unlockedRes.data ?? []) as UserUnlockedBookRow[]));
+    failedRows.push(...((failedRes.data ?? []) as { user_id: string; result: string }[]));
+  }
+
   const childrenByUser = new Map<string, ChildRow>();
-  for (const child of children) {
+  for (const child of childrenRows) {
     const existing = childrenByUser.get(child.user_id);
     if (!existing) {
       childrenByUser.set(child.user_id, child);
@@ -658,8 +744,7 @@ export async function getAdminUsersOverview() {
     }
   }
 
-  const unlocked = (unlockedRes.data ?? []) as UserUnlockedBookRow[];
-  const uniqueBookIds = [...new Set(unlocked.map((entry) => entry.book_id))];
+  const uniqueBookIds = [...new Set(unlockedRows.map((entry) => entry.book_id))];
   const { data: books } = uniqueBookIds.length
     ? await admin.from("books").select("id, slug, title").in("id", uniqueBookIds)
     : { data: [] as BookMiniRow[] };
@@ -668,7 +753,7 @@ export async function getAdminUsersOverview() {
   const unlockedCount = new Map<string, number>();
   const unlockedRowsByUser = new Map<string, { id: string; slug: string; title: string }[]>();
 
-  for (const entry of unlocked) {
+  for (const entry of unlockedRows) {
     unlockedCount.set(entry.user_id, (unlockedCount.get(entry.user_id) ?? 0) + 1);
     const book = booksById.get(entry.book_id);
     if (!book) {
@@ -680,19 +765,11 @@ export async function getAdminUsersOverview() {
   }
 
   const failedCount = new Map<string, number>();
-  for (const entry of failedRes.data ?? []) {
+  for (const entry of failedRows) {
     failedCount.set(entry.user_id, (failedCount.get(entry.user_id) ?? 0) + 1);
   }
 
-  let authUsersById = new Map<string, AuthUserLike>();
-  try {
-    const authUsers = await listAllAuthUsers();
-    authUsersById = new Map(authUsers.map((authUser) => [authUser.id, authUser]));
-  } catch {
-    authUsersById = new Map();
-  }
-
-  return profiles.map((user) => {
+  return users.map((user) => {
     const child = childrenByUser.get(user.id) ?? null;
     const names = getNameParts(user.full_name, user.email);
     const authUser = authUsersById.get(user.id) ?? null;
